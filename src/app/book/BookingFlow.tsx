@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ALLERGEN_NOTICE } from "@/content/company";
 import { formatDuration, formatPrice } from "@/lib/format";
 
 type Type = { id: number; name: string; description: string; durationMinutes: number; priceCents: number };
@@ -127,6 +128,8 @@ export default function BookingFlow({
       )}
 
       {step === 0 && (
+        <>
+        <p className="allergen">{ALLERGEN_NOTICE}</p>
         <div className="grid">
           {types.map((t) => (
             <button
@@ -148,6 +151,7 @@ export default function BookingFlow({
             </button>
           ))}
         </div>
+        </>
       )}
 
       {step === 1 && (
@@ -280,14 +284,33 @@ export default function BookingFlow({
               <textarea id="note" name="note" rows={3} maxLength={1000} />
               {fieldErrors.note && <span className="err">{fieldErrors.note}</span>}
             </div>
-            <label className="checkbox">
-              <input type="checkbox" name="consent" required />
-              <span>
-                Съгласен/на съм личните ми данни да бъдат обработвани от „Сладка кутия“ с цел организиране на
-                дегустацията.
-              </span>
-            </label>
-            {fieldErrors.consent && <p className="err" style={{ color: "var(--danger)" }}>{fieldErrors.consent}</p>}
+            <div className="checkbox">
+              <input
+                type="checkbox"
+                id="consent"
+                name="consent"
+                required
+                aria-required="true"
+                aria-invalid={!!fieldErrors.consent}
+                aria-describedby={fieldErrors.consent ? "consent-error" : undefined}
+              />
+              <label htmlFor="consent">
+                Запознах се с{" "}
+                <a href="/obshti-usloviya" target="_blank" rel="noopener">
+                  Общите условия<span className="sr-only"> (отваря се в нов прозорец)</span>
+                </a>{" "}
+                и{" "}
+                <a href="/poveritelnost" target="_blank" rel="noopener">
+                  Политиката за поверителност<span className="sr-only"> (отваря се в нов прозорец)</span>
+                </a>
+                .
+              </label>
+            </div>
+            {fieldErrors.consent && (
+              <p id="consent-error" className="err">
+                {fieldErrors.consent}
+              </p>
+            )}
             <button type="submit" className="btn btn-block" disabled={submitting}>
               {submitting ? "Изпращане…" : "Потвърди резервацията"}
             </button>

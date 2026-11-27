@@ -33,3 +33,22 @@ Found by the owner while testing the deployed site; fixed on `fix/code-review` t
 1. README deploy section: the real server path is `/opt/apps/tasting-booking` (not `~/tasting-booking`). Document how to add new `.env` keys after a `git pull` (`gen-env.sh` never overwrites an existing `.env`) and the `docker compose … logs` check after an update.
 2. README: `Server Reference ID did not match` errors in the logs come from internet scanners probing Next.js Server Actions and are rejected — expected noise.
 3. The admin could mark a booking as completed / no-show before it had started. Decision: block it (small change) — the API returns `409 not_started` and the day view offers only cancellation until the start time.
+
+## Specification 2 — clarifying questions (before plan v1)
+
+Spec: [02-specification.md](02-specification.md), plan: [02-plan.md](02-plan.md).
+
+| Topic | Answer |
+|---|---|
+| EU ODR link in the terms | The EU ODR platform was closed on 20 July 2025 (Regulation (EU) 2024/3228). The terms link **КЗП** (kzp.bg) and its conciliation commissions (ADR) and state that ODR no longer exists. |
+| Automated accessibility check | One-off **Lighthouse** run with the local Chrome against the Docker stack; results in the README. No new dependencies. |
+| 12-month retention | Enforced by a **daily job inside the app** (Next.js `instrumentation.ts`): at server start and every 24 h. |
+| Addresses and working hours | **Config file only** (`src/content/company.ts`), keyed by the DB location slug. |
+
+## Correction #3 (spec 2 plan v1 → v2)
+
+Plan v1 is kept unchanged in [../plan-versions/03-plan-spec2-v1-before-correction-3.md](../plan-versions/03-plan-spec2-v1-before-correction-3.md).
+
+1. The repository is now **public**: no real phone or e-mail in `src/content/company.ts`. `CONTACT_PHONE` stays in `.env` / `.env.example` (production already has it — the deploy must not break); new `CONTACT_EMAIL` and `ACCESSIBILITY_EMAIL` (defaults to `CONTACT_EMAIL`). The server reads them at request time with obvious placeholders as fallbacks.
+2. The booking checkbox is **not GDPR consent** — the legal basis is Art. 6(1)(b). Label: „Запознах се с Общите условия и Политиката за поверителност“ (both linked); still required; the timestamp is still stored (`consent_at`). The privacy policy says the same.
+3. Deadline: submission before 19:00, report by 17:45. Priority if time runs short: (a) footer + legal pages + consent links, (b) info pages + allergens, (c) accessibility fixes + Lighthouse, (d) sitemap/robots/404/error, (e) retention job.

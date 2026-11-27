@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { locationBySlug } from "@/content/company";
 import { getBookingByToken } from "@/lib/booking";
+import { readContact } from "@/lib/contact";
 import { formatPrice } from "@/lib/format";
 import { formatDateLong, formatTime } from "@/lib/time";
 import CancelButton from "./CancelButton";
@@ -28,7 +30,8 @@ export default async function BookingPage({ params }: { params: Promise<{ token:
   const booking = await getBookingByToken(token);
   if (!booking) notFound();
 
-  const phone = process.env.CONTACT_PHONE ?? "";
+  const { phone, phoneHref } = readContact();
+  const address = locationBySlug(booking.locationSlug)?.address || booking.address || booking.locationName;
   const confirmed = booking.status === "confirmed";
 
   return (
@@ -50,7 +53,7 @@ export default async function BookingPage({ params }: { params: Promise<{ token:
             {formatTime(booking.startsAt)} – {formatTime(booking.endsAt)}
           </Row>
           <Row label="Град">{booking.city}</Row>
-          <Row label="Място">{booking.address || booking.locationName}</Row>
+          <Row label="Място">{address}</Row>
           <Row label="Консултант">{booking.consultantName}</Row>
           <Row label="Цена">{formatPrice(booking.priceCents)}</Row>
           <Row label="Име">{booking.customerName}</Row>
@@ -72,12 +75,8 @@ export default async function BookingPage({ params }: { params: Promise<{ token:
           ) : (
             <p>
               Онлайн отказ е възможен до 24 часа преди началото.
-              {phone && (
-                <>
-                  {" "}
-                  Моля, обадете ни се на <a href={`tel:${phone.replace(/\s+/g, "")}`}>{phone}</a>.
-                </>
-              )}
+              {" "}
+              Моля, обадете ни се на <a href={`tel:${phoneHref}`}>{phone}</a>.
             </p>
           )}
         </section>

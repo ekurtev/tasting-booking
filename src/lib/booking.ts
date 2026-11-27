@@ -26,6 +26,7 @@ export interface Consultant {
 
 export interface Location {
   id: number;
+  slug: string;
   city: string;
   name: string;
   address: string;
@@ -47,7 +48,7 @@ export async function listActiveTypes(): Promise<TastingType[]> {
 
 export async function listActiveConsultants(): Promise<Consultant[]> {
   const { rows } = await getPool().query(
-    `SELECT c.id, c.name, c.buffer_minutes, l.city, l.name AS location_name, l.address
+    `SELECT c.id, c.name, c.buffer_minutes, l.slug AS location_slug, l.city, l.name AS location_name, l.address
        FROM consultants c JOIN locations l ON l.id = c.location_id
       WHERE c.active ORDER BY l.sort_order, c.sort_order, c.id`,
   );
@@ -62,7 +63,7 @@ export async function listActiveConsultants(): Promise<Consultant[]> {
 }
 
 export async function listLocations(): Promise<Location[]> {
-  const { rows } = await getPool().query(`SELECT id, city, name, address FROM locations ORDER BY sort_order, id`);
+  const { rows } = await getPool().query(`SELECT id, slug, city, name, address FROM locations ORDER BY sort_order, id`);
   return rows;
 }
 
@@ -164,7 +165,7 @@ export const bookingInputSchema = z.object({
     z.coerce.number().int().min(1, "Броят гости е от 1 до 50.").max(50, "Броят гости е от 1 до 50.").optional(),
   ),
   note: z.string().trim().max(1000, "Бележката е твърде дълга.").optional().or(z.literal("")),
-  consent: z.literal(true, "Необходимо е съгласие за обработка на личните данни."),
+  consent: z.literal(true, "Моля, потвърдете, че сте се запознали с Общите условия и Политиката за поверителност."),
 });
 
 export type BookingInput = z.infer<typeof bookingInputSchema>;
@@ -240,6 +241,7 @@ export interface BookingDetails {
   priceCents: number;
   consultantName: string;
   city: string;
+  locationSlug: string;
   locationName: string;
   address: string;
   customerName: string;
@@ -255,7 +257,7 @@ export async function getBookingByToken(token: string, now = new Date()): Promis
   const { rows } = await getPool().query(
     `SELECT b.id, b.status, b.starts_at, b.ends_at, b.customer_name, b.customer_phone, b.customer_email,
             b.guests, b.note, t.name AS type_name, t.price_cents, c.name AS consultant_name,
-            l.city, l.name AS location_name, l.address
+            l.slug AS location_slug, l.city, l.name AS location_name, l.address
        FROM bookings b
        JOIN tasting_types t ON t.id = b.tasting_type_id
        JOIN consultants c ON c.id = b.consultant_id
@@ -274,6 +276,7 @@ export async function getBookingByToken(token: string, now = new Date()): Promis
     priceCents: r.price_cents,
     consultantName: r.consultant_name,
     city: r.city,
+    locationSlug: r.location_slug,
     locationName: r.location_name,
     address: r.address,
     customerName: r.customer_name,
