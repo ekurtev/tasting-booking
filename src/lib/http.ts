@@ -18,6 +18,23 @@ export const MESSAGES = {
   server: "Възникна грешка. Моля, опитайте отново.",
 } as const;
 
+/** 400 response with the first message per field from a failed zod parse. */
+export function validationError(issues: { path: PropertyKey[]; message: string }[]): Response {
+  const fieldErrors: Record<string, string> = {};
+  for (const issue of issues) {
+    const field = String(issue.path[0] ?? "form");
+    fieldErrors[field] ??= issue.message;
+  }
+  return error(400, "validation", Object.values(fieldErrors)[0] ?? MESSAGES.badRequest, { fieldErrors });
+}
+
+/** Parses a positive integer route/query id; NaN-safe. */
+export function parseId(value: string | null | undefined): number | null {
+  if (!value || !/^\d{1,9}$/.test(value)) return null;
+  const n = Number(value);
+  return n > 0 ? n : null;
+}
+
 export async function readJson(request: Request): Promise<unknown> {
   try {
     return await request.json();

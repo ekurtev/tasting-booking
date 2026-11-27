@@ -30,6 +30,11 @@ plan history in `plan-versions/`.
   constraint; keep it. Server re-validates slots; UI checks are convenience only.
 - Cancellation tokens: store only SHA-256 hashes, never log raw tokens, keep `no-referrer`/`noindex`
   on `/booking/[token]`.
+- Admin area: every `/api/admin/*` handler starts with `requireAdminApi(request)` and every admin page
+  calls `requireAdminPage()` — the proxy (`src/proxy.ts`) is only an optimistic cookie check. Keep
+  same-origin checks on mutating admin requests. Admin passwords: scrypt via `scripts/password.mjs`.
+- The admin bootstrap never overwrites an existing admin; password changes go through
+  `node scripts/migrate.mjs --reset-admin-password`.
 - Rate-limit by `clientIp()` (X-Real-IP / last X-Forwarded-For hop) — never the first XFF value.
 - Containers run non-root; Postgres and the NPM admin port (81) are never exposed publicly.
 - Keep `README.md` → "What we changed and why" and `docs/corrections.md` up to date when the owner

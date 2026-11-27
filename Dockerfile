@@ -23,7 +23,7 @@ COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 COPY migrations ./migrations
 COPY seed ./seed
-COPY scripts/migrate.mjs scripts/docker-entrypoint.sh ./scripts/
+COPY scripts/migrate.mjs scripts/password.mjs scripts/docker-entrypoint.sh ./scripts/
 RUN mkdir -p .next/cache && chown node:node .next/cache
 USER node
 EXPOSE 3000

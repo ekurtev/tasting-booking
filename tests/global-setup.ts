@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import type { TestProject } from "vitest/node";
 import { migrate } from "../scripts/migrate.mjs";
+import { TEST_ADMIN } from "./test-admin";
 
 declare module "vitest" {
   export interface ProvidedContext {
@@ -44,7 +45,7 @@ export default async function setup(project: TestProject) {
     }
   }
 
-  await migrate({ databaseUrl, seed: true });
+  await migrate({ databaseUrl, seed: true, admin: { email: TEST_ADMIN.email, password: TEST_ADMIN.password } });
   project.provide("databaseUrl", databaseUrl);
 
   return () => {
