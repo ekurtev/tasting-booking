@@ -17,9 +17,11 @@ Self-hosted: Next.js 16 + PostgreSQL 17 in Docker Compose, behind NGINX Proxy Ma
 | Free-slot engine (30-min grid, 15-min buffer, 2 h lead time, 60-day horizon, Europe/Sofia, DST-safe) | `src/lib/slots.ts`, `src/lib/time.ts` |
 | Booking, cancellation, queries | `src/lib/booking.ts`, `src/app/api/**` |
 | Double-booking guard | Postgres exclusion constraint `bookings_no_overlap` in `migrations/001_init.sql` |
-| Rate limiting (booking 5/10 min, cancel 10/10 min per client IP) | `src/lib/rate-limit.ts` |
-| Migrations + one-time seed, run on every container start | `scripts/migrate.mjs`, `migrations/`, `seed/seed.sql` |
-| Pages | `/` home, `/book` booking flow, `/booking/[token]` confirmation + cancel |
+| Rate limiting (booking 5/10 min, cancel 10/10 min, sign-in 5/15 min per IP+email and 20/15 min per IP) | `src/lib/rate-limit.ts` |
+| Migrations, one-time seed and first-admin bootstrap, run on every container start | `scripts/migrate.mjs`, `migrations/`, `seed/seed.sql` |
+| Public pages | `/` home, `/book` booking flow, `/booking/[token]` confirmation + cancel |
+| Admin panel | `/admin` day view, `/admin/types`, `/admin/consultants/[id]` — `src/app/admin/**`, `src/app/api/admin/**`, `src/lib/admin.ts` |
+| Admin auth | `src/lib/auth.ts`, `src/lib/admin-session.ts`, `src/proxy.ts`, `scripts/password.mjs` |
 
 **Double booking is impossible at the database level.** Each booking blocks the consultant for
 `[starts_at, ends_at + buffer)`. An `EXCLUDE USING gist (consultant_id WITH =, tstzrange(...) WITH &&)
@@ -32,6 +34,33 @@ to `cancelled`, which frees the range.
 `/booking/[token]` page sends `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`,
 `Cache-Control: no-store` and robots/referrer meta tags; the app never logs tokens. Online
 cancellation is allowed until 24 h before the start; after that the page shows `CONTACT_PHONE`.
+
+## Admin panel (`/admin`)
+
+- **Sign-in** with email and password at `/admin/login`; no self-registration. On first start the
+  admin is created from `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env` (min. 12 characters), only if no admin
+  exists yet — later changes to `.env` never overwrite it. Your password is the `ADMIN_PASSWORD` value in
+  your `.env`. To set a new one: change it in `.env`, run `docker compose up -d` (so the container gets
+  the new value), then:
+  ```bash
+  docker compose exec app node scripts/migrate.mjs --reset-admin-password
+  ```
+  (this also signs out existing sessions; in production add `-f compose.yaml -f compose.prod.yaml`).
+- Passwords are stored as scrypt hashes. Sessions: random 256-bit token in an `HttpOnly`,
+  `SameSite=Lax` cookie (`Secure` when `APP_URL` is https), 7-day expiry, stored as a SHA-256 hash and
+  revoked on sign-out.
+- **Nothing without a session:** `src/proxy.ts` redirects `/admin/*` to the sign-in page and answers
+  `/api/admin/*` with `401` before any handler runs; in addition, the admin layout, every admin page and
+  every admin API handler verify the session against the database. State-changing admin requests must
+  come from the same origin (CSRF check), otherwise `403`. Admin responses are `noindex` and `no-store`.
+- **Day view**: choose a consultant and a date → time, tasting type, customer, phone, status. Confirmed
+  bookings can be set to *completed*, *no-show* or *cancelled* (cancelling frees the slot); other
+  transitions are rejected.
+- **Tasting types**: add, edit (name, description, duration, price) and deactivate. Inactive types
+  disappear from the public site; existing bookings keep their data.
+- **Consultants**: weekly hours per weekday (several intervals allowed, e.g. `09:00-12:00, 13:00-18:00`),
+  buffer minutes, and days off. Adding a day off on which bookings already exist keeps those bookings and
+  warns you to contact the customers.
 
 ## Run locally (Mac)
 
@@ -96,8 +125,9 @@ On the droplet as `deploy`:
    ```bash
    ./scripts/gen-env.sh
    ```
-   Set `APP_URL=https://vkus.eliankurtev.com` and the real `CONTACT_PHONE`. `APP_BIND`/`APP_PORT` are
-   ignored in production.
+   Set `APP_URL=https://vkus.eliankurtev.com` (this also makes the admin cookie `Secure`), your
+   `ADMIN_EMAIL` and the real `CONTACT_PHONE`. `ADMIN_PASSWORD` is generated — read it from `.env` on the
+   server when you first sign in. `APP_BIND`/`APP_PORT` are ignored in production.
 3. Create the network shared by NPM and the app (once):
    ```bash
    docker network create proxy
@@ -119,7 +149,8 @@ On the droplet as `deploy`:
    domain `vkus.eliankurtev.com`, scheme `http`, forward host `tasting-app`, port `3000`,
    enable *Block Common Exploits*; on the SSL tab request a Let's Encrypt certificate, enable
    *Force SSL* and *HTTP/2*.
-7. Open https://vkus.eliankurtev.com and make a test booking.
+7. Open https://vkus.eliankurtev.com and make a test booking, then sign in at
+   https://vkus.eliankurtev.com/admin and find it in the day view.
 
 Update to a new version:
 
@@ -143,8 +174,11 @@ Logs: `docker compose -f compose.yaml -f compose.prod.yaml logs -f app`.
 
 ## Known limitations / next steps
 
-- **Single admin account** (PR 2): only the admin from `.env` can sign in. Consultant accounts with
-  their own permissions are the next step.
+- **Single admin account**: only the admin from `.env` can sign in; there is no user management or
+  password change in the UI (use `--reset-admin-password`). Consultant accounts with their own
+  permissions (e.g. seeing only their own bookings) are the next step.
+- Consultants and locations themselves (names, addresses, adding a new consultant) are edited in the
+  database/seed for now; the admin manages their schedules and days off.
 - No emails/SMS yet — the confirmation page is the only receipt; customers should keep the link.
 - Rate-limit counters are in memory (reset on restart); fine for one app container.
 - Location addresses and `CONTACT_PHONE` are placeholders until the real values are set.
@@ -165,4 +199,9 @@ Logs: `docker compose -f compose.yaml -f compose.prod.yaml logs -f app`.
 | `no-referrer` + `noindex` on the booking page; tokens never logged; only token hashes stored | Correction #1: the URL is a bearer secret. |
 | Seed is insert-only and runs once (`ON CONFLICT DO NOTHING` + `seed:v1` marker) | Correction #1: restarts must never overwrite admin edits, re-activate deactivated items or re-create deleted hours. |
 | Advisory lock around booking inserts | Found in testing: simultaneous inserts racing on the exclusion constraint can deadlock in Postgres; the lock turns that into a clean 409 while the constraint stays the final guard. |
+| Admin is created from `.env` only when no admin exists; explicit `--reset-admin-password` to change it | Restarts must never silently overwrite credentials; a password change should be a deliberate operator action that also revokes sessions. |
+| Admin protection in three layers: proxy, layout/page, API handler | Spec: a signed-in check must hold for pages *and* the API. The proxy is only an optimistic cookie check (Next.js guidance), so every page and handler verifies the session in the database too; pages check themselves because layouts and pages render in parallel. |
+| Same-origin check on state-changing admin requests and sign-in | CSRF defence in addition to `SameSite=Lax` cookies. |
+| Status changes only from *confirmed* | Spec lists confirmed → completed / no-show / cancelled; anything else (e.g. un-cancelling into a slot that may be taken) is rejected. |
+| Days off do not cancel existing bookings | Silently cancelling customers is worse than a warning; the admin gets the number of affected bookings and decides. |
 | Plain SQL migrations with a tiny runner instead of an ORM | The key invariant is a native Postgres exclusion constraint; SQL keeps it explicit and reviewable. |

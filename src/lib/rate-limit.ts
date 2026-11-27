@@ -13,7 +13,10 @@ export interface RateLimitRule {
 export const RULES = {
   booking: { name: "booking", limit: 5, windowMs: 10 * 60_000 },
   cancel: { name: "cancel", limit: 10, windowMs: 10 * 60_000 },
+  /** Per client IP + email. */
   login: { name: "login", limit: 5, windowMs: 15 * 60_000 },
+  /** Per client IP across all emails. */
+  loginIp: { name: "login-ip", limit: 20, windowMs: 15 * 60_000 },
 } satisfies Record<string, RateLimitRule>;
 
 /** Returns true if the call is allowed and records it. */
