@@ -172,9 +172,16 @@ from that directory (`/opt/apps` must be writable by `deploy`).
    printf 'NEW_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
    ```
    otherwise add it with the real value in an editor (`nano .env`).
-3. Rebuild and restart:
+3. Rebuild with fresh base images (`--pull` fetches the latest patched `node:24-alpine`; a plain
+   `--build` would reuse the cached layers forever), refresh Postgres, and restart:
    ```bash
-   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+   docker compose -f compose.yaml -f compose.prod.yaml build --pull app
+   ```
+   ```bash
+   docker compose -f compose.yaml -f compose.prod.yaml pull db
+   ```
+   ```bash
+   docker compose -f compose.yaml -f compose.prod.yaml up -d
    ```
 4. Check that it came up — both services `running`/`healthy`, and the app log shows
    `[migrate] database is up to date` followed by Next.js `Ready`:
@@ -185,6 +192,26 @@ from that directory (`/opt/apps` must be writable by `deploy`).
    docker compose -f compose.yaml -f compose.prod.yaml logs --tail=50 app
    ```
    (`logs -f app` follows the log live.)
+
+### Monthly security maintenance
+
+`unattended-upgrades` patches only the Ubuntu host — **container images are never updated
+automatically**. Once a month (and when a CVE in nginx, OpenSSL, Node.js or Postgres is announced),
+run the update steps above even without new code, and refresh NGINX Proxy Manager, the only
+internet-facing container:
+
+```bash
+cd /opt/apps/tasting-booking && docker compose -f deploy/npm/compose.yaml pull && docker compose -f deploy/npm/compose.yaml up -d
+```
+
+Then remove superseded images:
+
+```bash
+docker image prune -f
+```
+
+`deploy/npm/data/` (NPM database) and `deploy/npm/letsencrypt/` (TLS private keys) are git-ignored —
+never commit or copy them off the server.
 
 **Expected log noise:** errors containing `Server Reference ID did not match` come from internet
 scanners probing for Next.js Server Actions (they POST made-up action ids). This app defines no Server
@@ -201,6 +228,9 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
   client-controlled and never trusted. Without a proxy (local) all requests share one bucket.
 - NGINX Proxy Manager's init system starts as root inside its container (upstream image design); its
   services run as `PUID/PGID 1000`. It is the only container with public ports.
+- Every response carries a same-origin `Content-Security-Policy` (no third-party scripts, styles,
+  fonts or frames; `frame-ancestors 'none'`), `Strict-Transport-Security: max-age=31536000`,
+  `X-Frame-Options: DENY`, `nosniff` and a restrictive `Permissions-Policy` (`next.config.ts`).
 
 ## Known limitations / next steps
 
@@ -212,6 +242,9 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
 - No emails/SMS yet — the confirmation page is the only receipt; customers should keep the link.
 - Rate-limit counters are in memory (reset on restart); fine for one app container.
 - Location addresses and `CONTACT_PHONE` are placeholders until the real values are set.
+- Security hardening next steps (from the CSO audit): a least-privilege Postgres role for the app
+  instead of the superuser, encrypted off-droplet database backups, and a retention period for
+  customer data.
 
 ## What we changed and why
 
@@ -257,3 +290,39 @@ session checked in every admin page and handler, double booking blocked in the d
 | Suggestion | `POST /api/bookings` returns the generic message instead of the first field message | Left: the booking form shows the per-field `fieldErrors`, so users already see specific messages. |
 | Suggestion | Rate-limiter sweep is O(n) per request once >10k keys are active within an hour | Left: needs >10k distinct client IPs per hour (IPv6 is disabled at NPM); fine for one small container. |
 | Suggestion | Cookie `Secure` flag depends on `APP_URL` being `https://` | Left: documented in the deploy steps; production `APP_URL` is https. |
+
+## Security audit (CSO)
+
+Before making the repository public, `main` was audited with the `/cso` skill in comprehensive mode.
+It covered attack surface, secrets archaeology over the **full git history**, the dependency supply
+chain, CI/CD, infrastructure, webhooks, LLM, OWASP Top 10, STRIDE and data classification. The
+production context was taken into account: DigitalOcean Cloud Firewall (22 from one admin IP, 80/443
+public), key-only SSH, `unattended-upgrades`, NPM admin on `127.0.0.1:81` via SSH tunnel, and the
+droplet's cloud-init.
+
+**Found clean:**
+- **Git history:** no secrets in any of the 7 commits. Every author is the GitHub noreply address,
+  and the only env file ever committed is `.env.example`, with placeholders. No AWS, OpenAI, GitHub,
+  Slack, DigitalOcean, JWT or private-key patterns.
+- **Dependencies:** `npm audit` reports 0 vulnerabilities, the lockfile is tracked, and no
+  production dependency has install scripts.
+- **App code:** parameterized SQL only, no raw HTML rendering, no `eval`, no open redirects, no
+  outbound requests (no SSRF). The admin session is verified in the database on every admin page
+  and API call. Admin mutations are checked for same-origin. Tokens are stored only as hashes.
+  Rate limiting cannot be bypassed via `X-Forwarded-For`.
+- **Not applicable:** CI/CD workflows, webhooks, file uploads and LLM integrations.
+
+**Result:** 0 Critical, 0 High, 4 Medium, 6 Low.
+
+| Sev | Finding | Outcome |
+|---|---|---|
+| Medium | No `Content-Security-Policy` or HSTS header (`next.config.ts`) | **Fixed.** Same-origin CSP plus `Strict-Transport-Security`. The booking flow, admin sign-in and home page were checked in a browser against the production build with no CSP violations. `tests/security-headers.test.ts` guards it. |
+| Medium | Container images were never refreshed. `unattended-upgrades` patches only the host, and the update step reused cached base layers. NPM (internet-facing) had no update step at all. | **Fixed (docs).** The update step uses `build --pull` and `pull db`, and a new "Monthly security maintenance" section refreshes NPM and prunes old images. |
+| Medium | `deploy/npm/data/` (NPM database) and `deploy/npm/letsencrypt/` (TLS private keys) live in the server's clone but weren't git-ignored | **Fixed.** Both are git-ignored, as are local `.gstack/` audit reports. |
+| Medium | The app connects to Postgres as the superuser created by the official image. Not exploitable today (no SQL injection), but any future injection bug could escalate to `COPY … PROGRAM`. | **Accepted for now.** The fix needs a separate least-privilege role, a migration with grants, a second credential in `.env` and changes to the deploy steps. That's the next hardening step. |
+| Low | Admin cookie has no `__Host-` prefix, and `Secure` depends on `APP_URL` being https | Accepted. Production `APP_URL` is https (deploy step 2), and NPM forces SSL. |
+| Low | No MFA for the single admin; fixed 7-day session with no idle timeout | Accepted. One admin with a generated 64-hex password, rate-limited sign-in, and sessions revoked on sign-out or password reset. |
+| Low | Image tags not pinned by digest (`node:24-alpine`, `postgres:17-alpine`, `jc21/nginx-proxy-manager:2`) | Accepted. Floating tags are what make the monthly `--pull` deliver security fixes. Pinning would require manual digest bumps. |
+| Low | Droplet (outside the repo): `deploy` has passwordless sudo and docker group membership, so a stolen SSH key means root. Docker was installed with `curl get.docker.com \| sh`. | Accepted. Key-only SSH from one IP behind the cloud firewall. The installer is the official Docker script, run once at provisioning. |
+| Low | Customer name, phone and email are kept indefinitely, and there are no documented database backups | Accepted. A retention period plus encrypted off-droplet backups are next steps. |
+| Low | The public repo shows the droplet IP, user `deploy` and the domain | Accepted. They're already public via DNS. Port 22 accepts only the admin IP, and that IP is not in the repo. |
