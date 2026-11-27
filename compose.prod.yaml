@@ -1,0 +1,16 @@
+# Production override:  docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+# - removes the host port of the app (ports are appended on merge, so they must be reset),
+# - attaches the app to the external "proxy" network shared with NGINX Proxy Manager,
+#   where NPM reaches it as http://tasting-app:3000.
+services:
+  app:
+    ports: !reset []
+    networks:
+      internal: {}
+      proxy:
+        aliases:
+          - tasting-app
+
+networks:
+  proxy:
+    external: true
