@@ -10,7 +10,8 @@ const ACTIONS = [
   { status: "cancelled", label: "Отмени" },
 ] as const;
 
-export default function StatusActions({ id }: { id: string }) {
+/** `started`: completed / no-show are offered only once the booking has begun (the server enforces it too). */
+export default function StatusActions({ id, started }: { id: string; started: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export default function StatusActions({ id }: { id: string }) {
 
   return (
     <div className="actions">
-      {ACTIONS.map((a) => (
+      {ACTIONS.filter((a) => started || a.status === "cancelled").map((a) => (
         <button
           key={a.status}
           type="button"

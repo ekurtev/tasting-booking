@@ -202,7 +202,10 @@ async function bookPublic(slot: string) {
 }
 
 describe("day view and booking status", () => {
-  it("shows a public booking in the consultant's day view and allows confirmed → completed only once", async () => {
+  const patch = (id: string, status: string) =>
+    patchBooking(req(`/api/admin/bookings/${id}`, { method: "PATCH", body: { status }, cookie }), ctx(id));
+
+  it("shows a public booking in the day view; a future booking cannot be marked completed / no-show", async () => {
     const { date, slot } = await freeSlot();
     expect((await bookPublic(slot)).status).toBe(201);
 
@@ -211,12 +214,31 @@ describe("day view and booking status", () => {
     const b = bookings.find((x: { startsAt: string }) => x.startsAt === slot);
     expect(b).toMatchObject({ typeName: "Лична дегустация", customerName: "Клиент Тестов", customerPhone: "+359 888 000 111", status: "confirmed" });
 
-    const done = await patchBooking(req(`/api/admin/bookings/${b.id}`, { method: "PATCH", body: { status: "completed" }, cookie }), ctx(b.id));
-    expect(done.status).toBe(200);
-    const again = await patchBooking(req(`/api/admin/bookings/${b.id}`, { method: "PATCH", body: { status: "cancelled" }, cookie }), ctx(b.id));
+    for (const status of ["completed", "no_show"]) {
+      const early = await patch(b.id, status);
+      expect(early.status).toBe(409);
+      expect((await early.json()).error).toBe("not_started");
+    }
+    const { rows } = await getPool().query("SELECT status FROM bookings WHERE id = $1", [b.id]);
+    expect(rows[0].status).toBe("confirmed");
+    expect((await patch(b.id, "confirmed")).status).toBe(400);
+  });
+
+  it("a booking that has started can be marked completed exactly once", async () => {
+    // Bookings in the past cannot be made through the public API, so insert one directly.
+    const { rows } = await getPool().query(
+      `INSERT INTO bookings (consultant_id, tasting_type_id, starts_at, ends_at, blocked_until, customer_name,
+                             customer_phone, customer_email, consent_at, cancel_token_hash)
+       VALUES ($1, $2, now() - interval '3 hours', now() - interval '2 hours', now() - interval '105 minutes',
+               'Минал Клиент', '+359 888 000 222', 'past@example.com', now(), md5(random()::text))
+       RETURNING id`,
+      [consultantId, typeId],
+    );
+    const id = rows[0].id;
+    expect((await patch(id, "completed")).status).toBe(200);
+    const again = await patch(id, "cancelled");
     expect(again.status).toBe(409);
-    const bogus = await patchBooking(req(`/api/admin/bookings/${b.id}`, { method: "PATCH", body: { status: "confirmed" }, cookie }), ctx(b.id));
-    expect(bogus.status).toBe(400);
+    expect((await again.json()).error).toBe("invalid_transition");
   });
 
   it("cancelling from the admin frees the slot on the public site", async () => {
