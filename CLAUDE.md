@@ -18,6 +18,7 @@ plan history in `plan-versions/`.
 - `npm run lint && npm run typecheck && npm test && npm run build` — the gate before every commit/PR
   (no CI; tests start a disposable Postgres container, so Docker must run)
 - `./scripts/gen-env.sh` — create `.env` with generated secrets (never print them)
+- `node scripts/admin-user.mjs list|add <email>|remove <email>` — manage admin accounts (inside the app container)
 - Production: `docker compose -f compose.yaml -f compose.prod.yaml up -d --build`
 
 ## Rules

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { listActiveConsultants, listActiveTypes } from "@/lib/booking";
+import { HORIZON_DAYS } from "@/lib/slots";
+import { addDays, sofiaDate } from "@/lib/time";
 import BookingFlow from "./BookingFlow";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +9,7 @@ export const metadata: Metadata = { title: "Запазване на дегуст
 
 export default async function BookPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const [{ type }, types, consultants] = await Promise.all([searchParams, listActiveTypes(), listActiveConsultants()]);
+  const today = sofiaDate(new Date());
   const initialTypeId = types.some((t) => String(t.id) === type) ? Number(type) : null;
   return (
     <>
@@ -15,6 +18,8 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
         types={types}
         consultants={consultants.map(({ id, name, city, locationName }) => ({ id, name, city, locationName }))}
         initialTypeId={initialTypeId}
+        today={today}
+        lastDay={addDays(today, HORIZON_DAYS)}
       />
     </>
   );

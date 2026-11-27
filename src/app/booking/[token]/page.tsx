@@ -50,7 +50,7 @@ export default async function BookingPage({ params }: { params: Promise<{ token:
           <Row label="Дегустация">{booking.typeName}</Row>
           <Row label="Дата">{formatDateLong(booking.startsAt)}</Row>
           <Row label="Час">
-            {formatTime(booking.startsAt)} – {formatTime(booking.endsAt)}
+            {formatTime(booking.startsAt)} - {formatTime(booking.endsAt)}
           </Row>
           <Row label="Град">{booking.city}</Row>
           <Row label="Място">{address}</Row>
@@ -68,7 +68,7 @@ export default async function BookingPage({ params }: { params: Promise<{ token:
         <section className="card">
           <h2>Отказ от резервацията</h2>
           <p className="meta">
-            Запазете този адрес — това е вашият личен линк за преглед и отказ. Не го споделяйте с други хора.
+            Запазете този адрес - това е вашият личен линк за преглед и отказ. Не го споделяйте с други хора.
           </p>
           {booking.canCancel ? (
             <CancelButton token={token} />

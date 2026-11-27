@@ -52,3 +52,39 @@ Plan v1 is kept unchanged in [../plan-versions/03-plan-spec2-v1-before-correctio
 1. The repository is now **public**: no real phone or e-mail in `src/content/company.ts`. `CONTACT_PHONE` stays in `.env` / `.env.example` (production already has it — the deploy must not break); new `CONTACT_EMAIL` and `ACCESSIBILITY_EMAIL` (defaults to `CONTACT_EMAIL`). The server reads them at request time with obvious placeholders as fallbacks.
 2. The booking checkbox is **not GDPR consent** — the legal basis is Art. 6(1)(b). Label: „Запознах се с Общите условия и Политиката за поверителност“ (both linked); still required; the timestamp is still stored (`consent_at`). The privacy policy says the same.
 3. Deadline: submission before 19:00, report by 17:45. Priority if time runs short: (a) footer + legal pages + consent links, (b) info pages + allergens, (c) accessibility fixes + Lighthouse, (d) sitemap/robots/404/error, (e) retention job.
+
+## Specification 3 — clarifying questions (before plan v1)
+
+Spec: [03-specification.md](03-specification.md), plan: [03-plan.md](03-plan.md).
+
+| Topic | Answer |
+|---|---|
+| Typography | **Self-hosted font**: Lora (SIL OFL 1.1, Cyrillic) for headings from the `@fontsource-variable/lora` package via `next/font/local`, served from our own origin; body text keeps the system font. CSP unchanged. |
+| Before/after screenshots | Committed to `docs/screenshots/spec3/` and embedded in the PR. **The repo is public:** every screenshot run used `CONTACT_PHONE="+359 000 000 000"` and `CONTACT_EMAIL="info@example.com"` as a shell override for that run only (`.env` untouched); no real name, phone, e-mail or booking may be visible. |
+| Rich tasting content | `src/content/tastings.ts` keyed by type slug; name, duration and price still from the database; types added later fall back to their database description. |
+
+## Correction #4 (PR #6, before merge)
+
+1. Step 3 of „Как работи“ showed a spoon-like icon that read as a broken magnifier. Redrawn as a clear magnifier (`IconMagnifier`: round lens + angled handle) with the same 1.8 stroke, 24-unit grid and 28px size as the other icons.
+2. Subtle hover/focus animations, 150-250 ms, using only transform / opacity / box-shadow / colour: cards with a link or button lift 3px with a softer, wider shadow (step cards too); buttons darken and move up 2px; header links and „→“ links get an underline that grows from the left (in-text links keep their permanent underline so they stay distinguishable); icons in step, tasting and location cards scale to 1.12. Keyboard focus (`:focus-visible` / `:focus-within`) triggers the same effects. All movement is inside `@media (prefers-reduced-motion: no-preference)`; with reduced motion only instant colour changes remain.
+3. Calendar on /book. **Checked first:** for the next Saturday and Sunday, `/api/slots` returns 0 slots, and `/api/days` lists no weekend day. Days off are excluded by the same code (`computeSlots` gets no intervals / `isDayOff`). **Not a bug:** the calendar only lists days that have free slots, so non-working days and days off are hidden, which is one of the two allowed options. Added `tests/calendar.test.ts`, a regression test with its own consultant (Mon-Fri hours plus one day off). It asserts no slots on Saturday, Sunday or the day off, and that `/api/days` leaves them out. A visible hint under the calendar now explains that only days with free slots are shown.
+4. *(Addition)* Step „3. Дата“ is now a real **month calendar** (`src/app/book/MonthCalendar.tsx`):
+   - A month heading („декември 2026“) with previous/next buttons limited to the 60-day booking window. "Today" and the window come from the server (Europe/Sofia).
+   - A 7-column Пн…Нд grid with equal square cells. Today is outlined.
+   - Available days show the day number and „N своб.“. On phones under 480px they show the number and a dot instead.
+   - Past, non-working and fully booked days are greyed, struck through, `disabled` + `aria-disabled` and not focusable. The selected day is filled.
+   - Keyboard: roving tabindex, so only one day is in the tab order. Arrow keys move between available days (←/→ day, ↑/↓ week, Home/End within the month) and cross month boundaries; Enter/Space selects.
+   - Motion: hover/focus lift, a 200 ms pop on select (the step waits for it), and a fade when the month changes. All of it is off under reduced motion, and the step then advances immediately.
+   - The live region announces the month and its number of free days.
+   - Each day's accessible name is its visible text plus screen-reader-only words („1 декември, вторник: 17 своб. (17 свободни часа)“). axe found that an `aria-label` hid the visible „17 своб.“ from the name (WCAG 2.5.3 Label in Name, `label-content-name-mismatch`), so the label was replaced.
+   - Lighthouse never reaches this step (it cannot click), so the calendar was checked with axe-core 4.14 driven over the Chrome DevTools protocol: 0 violations on mobile and desktop.
+5. *(Addition)* **Horizontal overflow.**
+   - Cause: a Correction #4 rule (`.main-nav a { display: inline-flex }`) came later in the stylesheet than the rule that hides the header text links below 640px, so it overrode it. On narrow viewports all nav links rendered, and the page became 533-584px wide, cutting off the right side: the header button and the summary panel under it.
+   - Fix: the links are now hidden by default and shown from 640px up. Added guards so long words never widen the layout: `min-width: 0` on grid/flex children and safe wrapping in the summary, footer and cards.
+   - Checked in the browser at 320, 360, 375, 414, 480, 600, 640, 700, 768, 900, 1024, 1100, 1280, 1400, 1440 and 1920px: `scrollWidth` equals the viewport width on every public page and every booking step.
+6. *(Addition, item 6)* `scripts/admin-user.mjs` with `add`, `remove` and `list`, plus `tests/admin-user.test.ts` (6 tests, including the real CLI) and a README section. The detailed brief for this item never reached the assistant, so these defaults were chosen and are open to change:
+   - The password is never a command-line argument: a hidden prompt (asked twice) on a terminal, or one line of stdin. Minimum 12 characters, as for the bootstrap admin. It is stored as scrypt via `scripts/password.mjs`.
+   - Existing e-mails are never overwritten (case-insensitive unique index → error).
+   - `remove` deletes the admin, revokes their sessions (`ON DELETE CASCADE`) and refuses to remove the last admin. The check is race-free under row locks.
+   - `list` prints id, e-mail, creation date and active session count, never hashes.
+   - The `Dockerfile` now copies the script into the image. No schema or app-logic change: sign-in already looks admins up by e-mail.

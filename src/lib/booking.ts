@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EXCLUSION_VIOLATION, getPool, pgErrorCode } from "./db";
+import { plainDashes } from "./format";
 import { computeSlots, HORIZON_DAYS, isWithinHorizon, type BusyRange, type WorkInterval } from "./slots";
 import { addDays, isoWeekday, isValidDate, sofiaDate, sofiaToUtc, timeToMinutes } from "./time";
 import { hashToken, isWellFormedToken, newToken } from "./tokens";
@@ -9,6 +10,7 @@ export const CANCEL_CUTOFF_HOURS = 24;
 
 export interface TastingType {
   id: number;
+  slug: string;
   name: string;
   description: string;
   durationMinutes: number;
@@ -34,13 +36,14 @@ export interface Location {
 
 export async function listActiveTypes(): Promise<TastingType[]> {
   const { rows } = await getPool().query(
-    `SELECT id, name, description, duration_minutes, price_cents
+    `SELECT id, slug, name, description, duration_minutes, price_cents
        FROM tasting_types WHERE active ORDER BY sort_order, id`,
   );
   return rows.map((r) => ({
     id: r.id,
-    name: r.name,
-    description: r.description,
+    slug: r.slug,
+    name: plainDashes(r.name),
+    description: plainDashes(r.description),
     durationMinutes: r.duration_minutes,
     priceCents: r.price_cents,
   }));
@@ -54,10 +57,10 @@ export async function listActiveConsultants(): Promise<Consultant[]> {
   );
   return rows.map((r) => ({
     id: r.id,
-    name: r.name,
+    name: plainDashes(r.name),
     bufferMinutes: r.buffer_minutes,
-    city: r.city,
-    locationName: r.location_name,
+    city: plainDashes(r.city),
+    locationName: plainDashes(r.location_name),
     address: r.address,
   }));
 }
@@ -272,13 +275,13 @@ export async function getBookingByToken(token: string, now = new Date()): Promis
     status: r.status,
     startsAt: r.starts_at,
     endsAt: r.ends_at,
-    typeName: r.type_name,
+    typeName: plainDashes(r.type_name),
     priceCents: r.price_cents,
-    consultantName: r.consultant_name,
-    city: r.city,
+    consultantName: plainDashes(r.consultant_name),
+    city: plainDashes(r.city),
     locationSlug: r.location_slug,
-    locationName: r.location_name,
-    address: r.address,
+    locationName: plainDashes(r.location_name),
+    address: plainDashes(r.address),
     customerName: r.customer_name,
     customerPhone: r.customer_phone,
     customerEmail: r.customer_email,

@@ -16,7 +16,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return error(409, "invalid_transition", "Статусът може да се промени само на потвърдена резервация.");
   }
   if (result === "not_started") {
-    return error(409, "not_started", "Резервацията още не е започнала — може само да бъде отменена.");
+    return error(409, "not_started", "Резервацията още не е започнала - може само да бъде отменена.");
   }
   return json({ ok: true, status: parsed.data.status });
 }

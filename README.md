@@ -7,8 +7,9 @@ The website is in Bulgarian; everything else (code, docs) is in English.
 Self-hosted: Next.js 16 + PostgreSQL 17 in Docker Compose, behind NGINX Proxy Manager. No external SaaS.
 
 - Specifications: [docs/01-specification.md](docs/01-specification.md) (booking + admin),
-  [docs/02-specification.md](docs/02-specification.md) (trust, legal pages, accessibility)
-- Approved plans: [docs/01-plan.md](docs/01-plan.md), [docs/02-plan.md](docs/02-plan.md) (history in [plan-versions/](plan-versions/))
+  [docs/02-specification.md](docs/02-specification.md) (trust, legal pages, accessibility),
+  [docs/03-specification.md](docs/03-specification.md) (brand redesign, „За нас“)
+- Approved plans: [docs/01-plan.md](docs/01-plan.md), [docs/02-plan.md](docs/02-plan.md), [docs/03-plan.md](docs/03-plan.md) (history in [plan-versions/](plan-versions/))
 - Corrections and clarifications: [docs/corrections.md](docs/corrections.md)
 
 ## How it works
@@ -51,6 +52,42 @@ cancellation is allowed until 24 h before the start; after that the page shows `
 | Allergen text (shown with every tasting type, in the FAQ and in the terms) | `ALLERGEN_NOTICE` in `src/content/company.ts` |
 | Technical log retention period in the privacy policy (`[срок, напр. 30 дни]`) | `src/app/poveritelnost/page.tsx` |
 
+### Content placeholders (full list)
+
+Facts only the owner can confirm. Nothing in the marketing copy invents a founding year, customer
+numbers, awards, named people or testimonials.
+
+| Placeholder | File |
+|---|---|
+| `[Име на фирмата] ЕООД` (legal name) | `src/content/company.ts` |
+| `[ЕИК]` | `src/content/company.ts` |
+| `[ДДС номер, ако фирмата е регистрирана по ДДС]` | `src/content/company.ts` |
+| `[Седалище и адрес на управление]` | `src/content/company.ts` |
+| `[ул. „Примерна“ 1, София]`, `[ул. „Примерна“ 2, Бургас]` (addresses) | `src/content/company.ts` |
+| Working hours (`09:00 - 18:00` sample) and map links (city search) | `src/content/company.ts` |
+| `[година на основаване]` | `src/app/za-nas/page.tsx` („Нашата история“) |
+| `[брой продукта в кутия]` | `src/app/za-nas/page.tsx` („Кутиите“) |
+| `[страни, от които доставяме]` | `src/app/za-nas/page.tsx` („Кутиите“) |
+| `[срок, напр. 30 дни]` (log retention) | `src/app/poveritelnost/page.tsx` |
+| Phone and e-mails | `.env` (`CONTACT_PHONE`, `CONTACT_EMAIL`, `ACCESSIBILITY_EMAIL`) |
+| Location names and addresses stored in the database (seed) | `locations` table; the public site shows the config addresses |
+
+### Visual design
+
+Warm cream, berry and caramel palette (all text pairs ≥ 4.5:1), Lora headings (SIL OFL, self-hosted
+from `@fontsource-variable/lora` via `next/font/local`; no external fonts, CSP unchanged), our own
+inline SVG icons and illustration (`src/components/icons.tsx`), CSS gradients and a dotted SVG
+pattern as a `data:` URI. Mobile first; tap targets ≥ 48px. Hover and keyboard focus share the same short (150-250 ms)
+micro-interactions (cards lift, buttons darken and move 2px, growing link underline, icons scale),
+using only transform / opacity / box-shadow / colour; all movement sits inside
+`prefers-reduced-motion: no-preference`. Per-type marketing copy (who it is for, what happens) lives in
+`src/content/tastings.ts`, keyed by the type slug.
+
+**Typography rule:** visible text uses the plain hyphen `-` instead of em/en dashes, including time
+ranges (`09:00 - 18:00`); Bulgarian quotes „ “ stay. Text from the database (type, consultant and
+location names, addresses) is passed through `plainDashes()` in `src/lib/format.ts`. Before/after
+screenshots: `docs/screenshots/spec3/`.
+
 The repository is public, so real phone numbers and e-mails live only in `.env`; pages read them at
 request time (`src/lib/contact.ts`), so the Docker build never bakes placeholders into static HTML.
 
@@ -76,6 +113,7 @@ new step's heading while a polite live region announces loading and the number o
 | Lighthouse 12 accessibility — `/` | **100** |
 | Lighthouse 12 accessibility — `/book` | **100** |
 | Lighthouse 12 accessibility — `/poveritelnost` | **100** |
+| After the spec 3 redesign: `/`, `/za-nas`, `/book`, `/book?type=2`, `/poveritelnost`, mobile and desktop | **100** on all |
 | Keyboard-only booking (Tab / Enter / Space only): skip link → type → consultant → day → slot → form errors → booking page → cancel | works end to end |
 
 Re-run: `npx lighthouse http://127.0.0.1:3000/book --only-categories=accessibility --view` (uses the
@@ -99,6 +137,23 @@ Postgres advisory lock keeps it to one run at a time. The log shows only the cou
   docker compose exec app node scripts/migrate.mjs --reset-admin-password
   ```
   (this also signs out existing sessions; in production add `-f compose.yaml -f compose.prod.yaml`).
+- **More admins** (operator command, no UI): `scripts/admin-user.mjs` lists, adds and removes admin
+  accounts. All admins have the same rights.
+  ```bash
+  docker compose exec app node scripts/admin-user.mjs list
+  ```
+  ```bash
+  docker compose exec app node scripts/admin-user.mjs add colleague@example.com
+  ```
+  ```bash
+  docker compose exec app node scripts/admin-user.mjs remove colleague@example.com
+  ```
+  `add` asks for the password twice without showing it (min. 12 characters); it is never a
+  command-line argument, so it can't end up in shell history or the process list. Without a terminal
+  it reads one line from stdin (`docker compose exec -T app node scripts/admin-user.mjs add x@example.com < pwfile`).
+  An existing e-mail is never overwritten (case-insensitive). `remove` also revokes that admin's
+  sessions and refuses to remove the last admin. `list` shows id, e-mail, creation date and active
+  sessions, never hashes. In production add `-f compose.yaml -f compose.prod.yaml`.
 - Passwords are stored as scrypt hashes. Sessions: random 256-bit token in an `HttpOnly`,
   `SameSite=Lax` cookie (`Secure` when `APP_URL` is https), 7-day expiry, stored as a SHA-256 hash and
   revoked on sign-out.
@@ -290,9 +345,10 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
 
 ## Known limitations / next steps
 
-- **Single admin account**: only the admin from `.env` can sign in; there is no user management or
-  password change in the UI (use `--reset-admin-password`). Consultant accounts with their own
-  permissions (e.g. seeing only their own bookings) are the next step.
+- **Admin accounts are managed from the command line** (`scripts/admin-user.mjs`), not in the UI, and
+  all admins have the same rights. A password change for another admin means remove + add;
+  `--reset-admin-password` changes the `.env` admin. Consultant accounts with their own permissions
+  (e.g. seeing only their own bookings) are the next step.
 - Consultants and locations themselves (names, addresses, adding a new consultant) are edited in the
   database/seed for now; the admin manages their schedules and days off.
 - No emails/SMS yet — the confirmation page is the only receipt; customers should keep the link.
@@ -338,6 +394,16 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
 | No cookie banner; no allergy field | Only a strictly necessary admin cookie; allergies are health data, so customers call us instead. |
 | One-off Lighthouse check instead of a committed axe test | Owner's choice: no new dependencies; results recorded above. |
 | Retention enforced by a daily in-app job that anonymises (not deletes) old bookings | Owner's choice; keeps statistics, removes personal data, no extra cron container. |
+| Spec 3 redesign: story-led home page, real „За нас“, restyled booking flow with a „Вашият избор“ summary and labelled step indicator | Spec 3: look like a premium artisan-sweets brand; booking rules, API and validation unchanged. |
+| Self-hosted Lora font (one new dependency, `@fontsource-variable/lora`) | Owner's choice: brand typography without external fonts; served from our origin, CSP unchanged. |
+| Per-type marketing copy in `src/content/tastings.ts` | Owner's choice: richer cards without a database change; admin-added types fall back to their description. |
+| Hyphens instead of em/en dashes in all visible text, also for database text via `plainDashes()` | Spec 3 typography rule; the seed's location names contain „–“ and the database must not change. |
+| No invented facts in „За нас“; placeholders listed above | Spec 3: believable copy without claims that could be false. |
+| Month calendar for the date step (roving tabindex, disabled non-bookable days, 60-day window) | Correction #4: a real calendar is easier to read than a list of chips; keyboard and screen-reader behaviour checked with axe-core over the DevTools protocol, since Lighthouse cannot reach that step. |
+| Header text links hidden below 640px by default (not by a later override) plus overflow guards | Correction #4: a CSS rule order bug made the page wider than the screen on narrow viewports; verified no horizontal scroll from 320px to 1920px. |
+| Non-working days and days off are never bookable (greyed in the calendar) | Correction #4: verified they never return slots; `tests/calendar.test.ts` guards it and a hint explains it to customers. |
+| `scripts/admin-user.mjs` add / remove / list instead of only the single `.env` admin | Item 6 of correction #4: more than one admin without building a user-management UI. Password never on the command line; never overwrites; the last admin can't be removed; removal revokes sessions. |
+| Screenshots taken with placeholder contacts (`CONTACT_PHONE`/`CONTACT_EMAIL` overridden for that run only) | Owner's instruction: the repository is public. |
 
 ## Code review
 
