@@ -60,10 +60,11 @@ export const IconCheck = ({ size = 28 }: P) => (
     <path d="M8 12.5l2.5 2.5L16 9.5" />
   </svg>
 );
-export const IconSpoon = ({ size = 28 }: P) => (
+/** Magnifier: round lens + angled handle (same 1.8 stroke and 24-unit grid as the other icons). */
+export const IconMagnifier = ({ size = 28 }: P) => (
   <svg {...base(size)}>
-    <ellipse cx="8" cy="7" rx="3.5" ry="4.5" />
-    <path d="M10 10.5L20 21" />
+    <circle cx="10.5" cy="10.5" r="6" />
+    <path d="M15 15l5.5 5.5" />
   </svg>
 );
 export const IconLeaf = ({ size = 28 }: P) => (

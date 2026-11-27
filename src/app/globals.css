@@ -348,3 +348,44 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
   .logo { font-size: 1.08rem; gap: 6px; }
   .btn-nav { padding: 0 14px; font-size: 0.95rem; }
 }
+
+/* ---------- micro-interactions (correction #4) ----------
+   Short (150-250 ms), only transform / opacity / box-shadow / colour, the same on hover and keyboard
+   focus. Everything that moves lives inside no-preference, so reduced motion gets none of it. */
+.card { --lift-shadow: 0 2px 4px rgba(46, 31, 23, 0.05), 0 14px 32px rgba(46, 31, 23, 0.1); }
+.link-arrow, .main-nav a:not(.btn) { position: relative; text-decoration: none; }
+.main-nav a:not(.btn) { display: inline-flex; align-items: center; min-height: 44px; }
+.link-arrow::after, .main-nav a:not(.btn)::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 8px; height: 2px;
+  background: currentColor; transform: scaleX(0); transform-origin: left; opacity: 0.85;
+}
+.link-arrow:hover::after, .link-arrow:focus-visible::after,
+.main-nav a:not(.btn):hover::after, .main-nav a:not(.btn):focus-visible::after { transform: scaleX(1); }
+.main-nav a:not(.btn):hover { text-decoration: none; }
+.link-arrow:hover { text-decoration: none; }
+a { transition: color 0.18s ease, text-decoration-color 0.18s ease; }
+.site-footer a { text-decoration-color: rgba(255, 255, 255, 0.45); }
+.site-footer a:hover, .site-footer a:focus-visible { text-decoration-color: currentColor; }
+.btn:focus-visible { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }
+.btn-secondary:focus-visible { background: var(--brand-soft); color: var(--brand-dark); }
+.btn-light:focus-visible { background: var(--caramel-soft); color: var(--brand-dark); border-color: var(--caramel-soft); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .card, .choice, .chip { transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.15s ease, background-color 0.15s ease; }
+  .card:has(a, button):hover, .card:has(a, button):focus-within,
+  .choice:hover, .choice:focus-visible, .chip:hover, .chip:focus-visible {
+    transform: translateY(-3px); box-shadow: var(--lift-shadow, 0 14px 32px rgba(46, 31, 23, 0.1));
+  }
+  .step-card:hover, .step-card:focus-within { transform: translateY(-3px); box-shadow: var(--lift-shadow); }
+  .btn { transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease; }
+  .btn:hover, .btn:focus-visible { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(125, 34, 54, 0.22); }
+  .btn:active { transform: translateY(0); box-shadow: none; }
+  .link-arrow::after, .main-nav a:not(.btn)::after { transition: transform 0.22s ease; }
+  .icon-bubble svg { transition: transform 0.22s ease; }
+  .step-card:hover .icon-bubble svg, .step-card:focus-within .icon-bubble svg,
+  .tasting:hover .icon-bubble svg, .tasting:focus-within .icon-bubble svg,
+  .location:hover .icon-bubble svg { transform: scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn:hover, .btn:focus-visible, .card:hover, .card:focus-within, .choice:hover, .chip:hover { transform: none; }
+}

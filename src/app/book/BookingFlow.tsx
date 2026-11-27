@@ -240,26 +240,32 @@ export default function BookingFlow({
           ) : days.length === 0 ? (
             <p>В следващите 60 дни няма свободни часове. Моля, изберете друг консултант.</p>
           ) : (
-            <div className="chips">
-              {days.map((d) => (
-                <button
-                  key={d.date}
-                  type="button"
-                  className="chip"
-                  aria-pressed={d.date === date}
-                  aria-label={`${longDayFmt.format(dateOf(d.date))}, ${slotsWord(d.slots)}`}
-                  onClick={() => {
-                    setDate(d.date);
-                    setSlot(null);
-                    if (consultantId && typeId) void loadSlots(consultantId, typeId, d.date);
-                    go(3);
-                  }}
-                >
-                  {dayFmt.format(dateOf(d.date))}
-                  <small aria-hidden="true">{d.slots} своб.</small>
-                </button>
-              ))}
-            </div>
+            <>
+              <p className="meta">
+                Показваме само дните със свободни часове. Почивните дни на консултанта и напълно заетите дни не се
+                показват.
+              </p>
+              <div className="chips">
+                {days.map((d) => (
+                  <button
+                    key={d.date}
+                    type="button"
+                    className="chip"
+                    aria-pressed={d.date === date}
+                    aria-label={`${longDayFmt.format(dateOf(d.date))}, ${slotsWord(d.slots)}`}
+                    onClick={() => {
+                      setDate(d.date);
+                      setSlot(null);
+                      if (consultantId && typeId) void loadSlots(consultantId, typeId, d.date);
+                      go(3);
+                    }}
+                  >
+                    {dayFmt.format(dateOf(d.date))}
+                    <small aria-hidden="true">{d.slots} своб.</small>
+                  </button>
+                ))}
+              </div>
+            </>
           ))}
 
         {step === 3 && date && (

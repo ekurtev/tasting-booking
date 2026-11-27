@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HeroBox, IconBox, IconCalendar, IconCheck, IconCoin, IconPin, IconSpoon } from "@/components/icons";
+import { HeroBox, IconBox, IconCalendar, IconCheck, IconCoin, IconMagnifier, IconPin } from "@/components/icons";
 import TastingIcon from "@/components/TastingIcon";
 import { ALLERGEN_NOTICE, company } from "@/content/company";
 import { TASTING_CONTENT, toneFor } from "@/content/tastings";
@@ -16,7 +16,7 @@ const STEPS = [
     text: "Показваме само наистина свободните часове в София и Бургас.",
   },
   {
-    icon: <IconSpoon />,
+    icon: <IconMagnifier />,
     title: "Опитайте кутиите",
     text: "Консултантът ви представя вкусовете и отговаря на въпросите ви.",
   },

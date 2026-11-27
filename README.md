@@ -77,8 +77,10 @@ numbers, awards, named people or testimonials.
 Warm cream, berry and caramel palette (all text pairs ≥ 4.5:1), Lora headings (SIL OFL, self-hosted
 from `@fontsource-variable/lora` via `next/font/local`; no external fonts, CSP unchanged), our own
 inline SVG icons and illustration (`src/components/icons.tsx`), CSS gradients and a dotted SVG
-pattern as a `data:` URI. Mobile first; tap targets ≥ 48px; hover transitions are switched off under
-`prefers-reduced-motion`. Per-type marketing copy (who it is for, what happens) lives in
+pattern as a `data:` URI. Mobile first; tap targets ≥ 48px. Hover and keyboard focus share the same short (150-250 ms)
+micro-interactions (cards lift, buttons darken and move 2px, growing link underline, icons scale),
+using only transform / opacity / box-shadow / colour; all movement sits inside
+`prefers-reduced-motion: no-preference`. Per-type marketing copy (who it is for, what happens) lives in
 `src/content/tastings.ts`, keyed by the type slug.
 
 **Typography rule:** visible text uses the plain hyphen `-` instead of em/en dashes, including time
@@ -379,6 +381,7 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
 | Per-type marketing copy in `src/content/tastings.ts` | Owner's choice: richer cards without a database change; admin-added types fall back to their description. |
 | Hyphens instead of em/en dashes in all visible text, also for database text via `plainDashes()` | Spec 3 typography rule; the seed's location names contain „–“ and the database must not change. |
 | No invented facts in „За нас“; placeholders listed above | Spec 3: believable copy without claims that could be false. |
+| Calendar on /book lists only days with free slots (weekends without hours and days off are hidden) | Correction #4: verified they never return slots; `tests/calendar.test.ts` guards it and a hint explains it to customers. |
 | Screenshots taken with placeholder contacts (`CONTACT_PHONE`/`CONTACT_EMAIL` overridden for that run only) | Owner's instruction: the repository is public. |
 
 ## Code review
