@@ -6,8 +6,9 @@ The website is in Bulgarian; everything else (code, docs) is in English.
 
 Self-hosted: Next.js 16 + PostgreSQL 17 in Docker Compose, behind NGINX Proxy Manager. No external SaaS.
 
-- Specification: [docs/01-specification.md](docs/01-specification.md)
-- Approved plan: [docs/01-plan.md](docs/01-plan.md) (history in [plan-versions/](plan-versions/))
+- Specifications: [docs/01-specification.md](docs/01-specification.md) (booking + admin),
+  [docs/02-specification.md](docs/02-specification.md) (trust, legal pages, accessibility)
+- Approved plans: [docs/01-plan.md](docs/01-plan.md), [docs/02-plan.md](docs/02-plan.md) (history in [plan-versions/](plan-versions/))
 - Corrections and clarifications: [docs/corrections.md](docs/corrections.md)
 
 ## How it works
@@ -20,6 +21,10 @@ Self-hosted: Next.js 16 + PostgreSQL 17 in Docker Compose, behind NGINX Proxy Ma
 | Rate limiting (booking 5/10 min, cancel 10/10 min, sign-in 5/15 min per IP+email and 20/15 min per IP) | `src/lib/rate-limit.ts` |
 | Migrations, one-time seed and first-admin bootstrap, run on every container start | `scripts/migrate.mjs`, `migrations/`, `seed/seed.sql` |
 | Public pages | `/` home, `/book` booking flow, `/booking/[token]` confirmation + cancel |
+| Info and legal pages | `/za-nas`, `/kak-raboti`, `/vaprosi`, `/kontakti`, `/obshti-usloviya`, `/poveritelnost`, `/biskvitki`, `/dostapnost` — all linked from the footer (`src/components/SiteFooter.tsx`) |
+| Company details (one place) | `src/content/company.ts` (+ phone/e-mails from `.env`, see below) |
+| 12-month retention job | `src/lib/retention.ts`, started by `src/instrumentation.ts`; `migrations/003_retention.sql` |
+| SEO | `src/app/sitemap.ts`, `src/app/robots.ts`, `src/app/icon.svg`, per-page `metadata` |
 | Admin panel | `/admin` day view, `/admin/types`, `/admin/consultants/[id]` — `src/app/admin/**`, `src/app/api/admin/**`, `src/lib/admin.ts` |
 | Admin auth | `src/lib/auth.ts`, `src/lib/admin-session.ts`, `src/proxy.ts`, `scripts/password.mjs` |
 
@@ -34,6 +39,54 @@ to `cancelled`, which frees the range.
 `/booking/[token]` page sends `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`,
 `Cache-Control: no-store` and robots/referrer meta tags; the app never logs tokens. Online
 cancellation is allowed until 24 h before the start; after that the page shows `CONTACT_PHONE`.
+
+## Company details, legal texts and accessibility
+
+**Replace the placeholders before going live.** Everything in `[square brackets]` is a placeholder:
+
+| What | Where |
+|---|---|
+| Legal name, ЕИК, VAT number, registered address, location addresses, working hours, map links, date of the legal texts | `src/content/company.ts` |
+| Phone, contact e-mail, accessibility e-mail | `.env`: `CONTACT_PHONE`, `CONTACT_EMAIL`, `ACCESSIBILITY_EMAIL` (optional, defaults to `CONTACT_EMAIL`) |
+| Allergen text (shown with every tasting type, in the FAQ and in the terms) | `ALLERGEN_NOTICE` in `src/content/company.ts` |
+| Technical log retention period in the privacy policy (`[срок, напр. 30 дни]`) | `src/app/poveritelnost/page.tsx` |
+
+The repository is public, so real phone numbers and e-mails live only in `.env`; pages read them at
+request time (`src/lib/contact.ts`), so the Docker build never bakes placeholders into static HTML.
+
+> **The legal texts are templates, not legal advice.** „Общи условия“, „Политика за поверителност“,
+> „Политика за бисквитки“ and „Декларация за достъпност“ must be reviewed by a lawyer before production
+> use (company data, VAT status, log retention, withdrawal-right wording, hosting provider details).
+
+- **Booking checkbox** — „Запознах се с Общите условия и Политиката за поверителност“ (both linked). It
+  is an acknowledgement, not GDPR consent: the legal basis for booking data is Art. 6(1)(b). It is
+  still required and its time is stored in `bookings.consent_at`.
+- **Cookies** — only `tb_admin_session` (staff sign-in, strictly necessary); no analytics, no tracking,
+  no external scripts/fonts/maps → no cookie banner. The CSP from the CSO audit is unchanged.
+- **Allergens** — information only; the form deliberately has no allergy field (health data).
+
+**Accessibility (target WCAG 2.2 AA).** Landmarks (`header`/`nav`/`main`/`footer`), a skip link, one
+`h1` per page, a visible `:focus-visible` outline, labelled fields with errors linked via
+`aria-describedby` (the first invalid field gets focus), and in the booking flow focus moves to each
+new step's heading while a polite live region announces loading and the number of free days/slots.
+`prefers-reduced-motion` turns off smooth scrolling and transitions.
+
+| Check (local Docker stack, 27.11.2026) | Result |
+|---|---|
+| Lighthouse 12 accessibility — `/` | **100** |
+| Lighthouse 12 accessibility — `/book` | **100** |
+| Lighthouse 12 accessibility — `/poveritelnost` | **100** |
+| Keyboard-only booking (Tab / Enter / Space only): skip link → type → consultant → day → slot → form errors → booking page → cancel | works end to end |
+
+Re-run: `npx lighthouse http://127.0.0.1:3000/book --only-categories=accessibility --view` (uses the
+local Chrome). Lighthouse sees only the first step of `/book`; later steps were checked by keyboard.
+
+**Data retention.** As promised in the privacy policy, a job inside the app (started from
+`src/instrumentation.ts` at server start and then every 24 h) anonymises bookings whose tasting started
+more than 12 months ago: name → „Анонимизиран клиент“, phone → `000000`, e-mail →
+`anonymized@invalid`, note removed, the personal link stops working, `anonymized_at` is set. Type,
+consultant, time and status stay for statistics; the double-booking constraint is untouched. A
+Postgres advisory lock keeps it to one run at a time. The log shows only the count.
 
 ## Admin panel (`/admin`)
 
@@ -128,7 +181,7 @@ from that directory (`/opt/apps` must be writable by `deploy`).
    ./scripts/gen-env.sh
    ```
    Set `APP_URL=https://vkus.eliankurtev.com` (this also makes the admin cookie `Secure`), your
-   `ADMIN_EMAIL` and the real `CONTACT_PHONE`. `ADMIN_PASSWORD` is generated — read it from `.env` on the
+   `ADMIN_EMAIL`, the real `CONTACT_PHONE` and `CONTACT_EMAIL` (optionally `ACCESSIBILITY_EMAIL`). `ADMIN_PASSWORD` is generated — read it from `.env` on the
    server when you first sign in. `APP_BIND`/`APP_PORT` are ignored in production.
 3. Create the network shared by NPM and the app (once):
    ```bash
@@ -172,6 +225,9 @@ from that directory (`/opt/apps` must be writable by `deploy`).
    printf 'NEW_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
    ```
    otherwise add it with the real value in an editor (`nano .env`).
+   *Spec 2 release:* `CONTACT_EMAIL` and `ACCESSIBILITY_EMAIL` are new and optional — without them the
+   site shows the `[имейл]` placeholder; nothing breaks. Migration `003_retention.sql` runs
+   automatically on start.
 3. Rebuild with fresh base images (`--pull` fetches the latest patched `node:24-alpine`; a plain
    `--build` would reuse the cached layers forever), refresh Postgres, and restart:
    ```bash
@@ -241,10 +297,13 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
   database/seed for now; the admin manages their schedules and days off.
 - No emails/SMS yet — the confirmation page is the only receipt; customers should keep the link.
 - Rate-limit counters are in memory (reset on restart); fine for one app container.
-- Location addresses and `CONTACT_PHONE` are placeholders until the real values are set.
+- Company details, addresses and hours in `src/content/company.ts` and the contact values in `.env` are
+  placeholders until the real values are set; the legal texts await a lawyer's review.
+- Open Graph title/description are site-wide (pages set their own `<title>` and meta description).
+- The admin panel shows anonymised bookings as „Анонимизиран клиент“; there is no separate filter.
 - Security hardening next steps (from the CSO audit): a least-privilege Postgres role for the app
-  instead of the superuser, encrypted off-droplet database backups, and a retention period for
-  customer data.
+  instead of the superuser and encrypted off-droplet database backups (the retention period is now
+  enforced — see "Data retention").
 
 ## What we changed and why
 
@@ -271,6 +330,14 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
 | *Completed* / *no-show* only after the booking has started | Correction #2 (production test): the admin could mark a future booking as a no-show. Blocked in the API (`409 not_started`) and hidden in the day view; cancelling stays possible at any time. |
 | Deploy docs use `/opt/apps/tasting-booking`, explain adding new `.env` keys and the post-update logs check | Correction #2: the real server path differs from `~/tasting-booking`, and `gen-env.sh` never overwrites an existing `.env`. |
 | README notes the `Server Reference ID did not match` log lines as scanner noise | Correction #2: seen in production logs; they are rejected probes, not app errors. |
+| **Legal pages are templates to be reviewed by a lawyer** | Spec 2: legally complete structure now, legal sign-off later. |
+| Terms link КЗП and its conciliation commissions instead of the EU ODR platform | The EU ODR platform was closed on 20 July 2025 (Regulation (EU) 2024/3228); a dead link would mislead customers. Owner's choice. |
+| Phone and e-mails come from `.env` (`CONTACT_PHONE`, new `CONTACT_EMAIL`, `ACCESSIBILITY_EMAIL`), the rest of the company data from `src/content/company.ts` | Correction #3: the repository is public. `CONTACT_PHONE` kept so the production `.env` keeps working. |
+| Booking checkbox is an acknowledgement of the terms and privacy policy, not consent | Correction #3: the legal basis is Art. 6(1)(b) GDPR (contract); consent would be the wrong basis and could be withdrawn. |
+| Addresses and working hours from the config file, not the database | Owner's choice: one place to edit; business hours are not the same as bookable slots. |
+| No cookie banner; no allergy field | Only a strictly necessary admin cookie; allergies are health data, so customers call us instead. |
+| One-off Lighthouse check instead of a committed axe test | Owner's choice: no new dependencies; results recorded above. |
+| Retention enforced by a daily in-app job that anonymises (not deletes) old bookings | Owner's choice; keeps statistics, removes personal data, no extra cron container. |
 
 ## Code review
 
