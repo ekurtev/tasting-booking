@@ -381,7 +381,9 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
 | Per-type marketing copy in `src/content/tastings.ts` | Owner's choice: richer cards without a database change; admin-added types fall back to their description. |
 | Hyphens instead of em/en dashes in all visible text, also for database text via `plainDashes()` | Spec 3 typography rule; the seed's location names contain „–“ and the database must not change. |
 | No invented facts in „За нас“; placeholders listed above | Spec 3: believable copy without claims that could be false. |
-| Calendar on /book lists only days with free slots (weekends without hours and days off are hidden) | Correction #4: verified they never return slots; `tests/calendar.test.ts` guards it and a hint explains it to customers. |
+| Month calendar for the date step (roving tabindex, disabled non-bookable days, 60-day window) | Correction #4: a real calendar is easier to read than a list of chips; keyboard and screen-reader behaviour checked with axe-core over the DevTools protocol, since Lighthouse cannot reach that step. |
+| Header text links hidden below 640px by default (not by a later override) plus overflow guards | Correction #4: a CSS rule order bug made the page wider than the screen on narrow viewports; verified no horizontal scroll from 320px to 1920px. |
+| Non-working days and days off are never bookable (greyed in the calendar) | Correction #4: verified they never return slots; `tests/calendar.test.ts` guards it and a hint explains it to customers. |
 | Screenshots taken with placeholder contacts (`CONTACT_PHONE`/`CONTACT_EMAIL` overridden for that run only) | Owner's instruction: the repository is public. |
 
 ## Code review

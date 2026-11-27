@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ALLERGEN_NOTICE } from "@/content/company";
 import { formatDuration, formatPrice } from "@/lib/format";
+import MonthCalendar, { slotsWord } from "./MonthCalendar";
 
 type Type = { id: number; name: string; description: string; durationMinutes: number; priceCents: number };
 type Consultant = { id: number; name: string; city: string; locationName: string };
@@ -11,7 +12,6 @@ type Day = { date: string; slots: number };
 
 const TZ = "Europe/Sofia";
 const timeFmt = new Intl.DateTimeFormat("bg-BG", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
-const dayFmt = new Intl.DateTimeFormat("bg-BG", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" });
 const longDayFmt = new Intl.DateTimeFormat("bg-BG", {
   timeZone: "UTC",
   weekday: "long",
@@ -23,9 +23,7 @@ const scrollBehavior = (): ScrollBehavior =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 const FIELD_ORDER = ["name", "phone", "email", "guests", "note", "consent"];
 
-function slotsWord(n: number) {
-  return n === 1 ? "1 свободен час" : `${n} свободни часа`;
-}
+const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const STEP_TITLES = ["Вид дегустация", "Консултант и град", "Дата", "Час", "Вашите данни"];
 
@@ -33,10 +31,15 @@ export default function BookingFlow({
   types,
   consultants,
   initialTypeId,
+  today,
+  lastDay,
 }: {
   types: Type[];
   consultants: Consultant[];
   initialTypeId: number | null;
+  /** Today and the last bookable day (Europe/Sofia), from the server. */
+  today: string;
+  lastDay: string;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(initialTypeId ? 1 : 0);
@@ -242,29 +245,23 @@ export default function BookingFlow({
           ) : (
             <>
               <p className="meta">
-                Показваме само дните със свободни часове. Почивните дни на консултанта и напълно заетите дни не се
-                показват.
+                Изберете ден от календара. Почивните, напълно заетите и минали дни са сиви и не могат да се изберат.
               </p>
-              <div className="chips">
-                {days.map((d) => (
-                  <button
-                    key={d.date}
-                    type="button"
-                    className="chip"
-                    aria-pressed={d.date === date}
-                    aria-label={`${longDayFmt.format(dateOf(d.date))}, ${slotsWord(d.slots)}`}
-                    onClick={() => {
-                      setDate(d.date);
-                      setSlot(null);
-                      if (consultantId && typeId) void loadSlots(consultantId, typeId, d.date);
-                      go(3);
-                    }}
-                  >
-                    {dayFmt.format(dateOf(d.date))}
-                    <small aria-hidden="true">{d.slots} своб.</small>
-                  </button>
-                ))}
-              </div>
+              <MonthCalendar
+                days={days}
+                today={today}
+                lastDay={lastDay}
+                selected={date}
+                onAnnounce={setAnnouncement}
+                onSelect={(d) => {
+                  setDate(d);
+                  setSlot(null);
+                  if (consultantId && typeId) void loadSlots(consultantId, typeId, d);
+                  // Let the short "pop" on the chosen day play before moving on (skipped with reduced motion).
+                  if (prefersReducedMotion()) go(3);
+                  else window.setTimeout(() => go(3), 200);
+                }}
+              />
             </>
           ))}
 
