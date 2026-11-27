@@ -1,0 +1,26 @@
+# NGINX Proxy Manager — the only public entry point (80/443). Admin UI on 127.0.0.1:81 only
+# (reach it through an SSH tunnel). Create the shared network first:  docker network create proxy
+name: npm
+
+services:
+  npm:
+    image: jc21/nginx-proxy-manager:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:81:81"
+    environment:
+      # Run nginx and the NPM backend as an unprivileged user inside the container.
+      PUID: "1000"
+      PGID: "1000"
+      DISABLE_IPV6: "true"
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
