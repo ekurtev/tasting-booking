@@ -82,3 +82,9 @@ Spec: [03-specification.md](03-specification.md), plan: [03-plan.md](03-plan.md)
    - Cause: a Correction #4 rule (`.main-nav a { display: inline-flex }`) came later in the stylesheet than the rule that hides the header text links below 640px, so it overrode it. On narrow viewports all nav links rendered, and the page became 533-584px wide, cutting off the right side: the header button and the summary panel under it.
    - Fix: the links are now hidden by default and shown from 640px up. Added guards so long words never widen the layout: `min-width: 0` on grid/flex children and safe wrapping in the summary, footer and cards.
    - Checked in the browser at 320, 360, 375, 414, 480, 600, 640, 700, 768, 900, 1024, 1100, 1280, 1400, 1440 and 1920px: `scrollWidth` equals the viewport width on every public page and every booking step.
+6. *(Addition, item 6)* `scripts/admin-user.mjs` with `add`, `remove` and `list`, plus `tests/admin-user.test.ts` (6 tests, including the real CLI) and a README section. The detailed brief for this item never reached the assistant, so these defaults were chosen and are open to change:
+   - The password is never a command-line argument: a hidden prompt (asked twice) on a terminal, or one line of stdin. Minimum 12 characters, as for the bootstrap admin. It is stored as scrypt via `scripts/password.mjs`.
+   - Existing e-mails are never overwritten (case-insensitive unique index → error).
+   - `remove` deletes the admin, revokes their sessions (`ON DELETE CASCADE`) and refuses to remove the last admin. The check is race-free under row locks.
+   - `list` prints id, e-mail, creation date and active session count, never hashes.
+   - The `Dockerfile` now copies the script into the image. No schema or app-logic change: sign-in already looks admins up by e-mail.

@@ -137,6 +137,23 @@ Postgres advisory lock keeps it to one run at a time. The log shows only the cou
   docker compose exec app node scripts/migrate.mjs --reset-admin-password
   ```
   (this also signs out existing sessions; in production add `-f compose.yaml -f compose.prod.yaml`).
+- **More admins** (operator command, no UI): `scripts/admin-user.mjs` lists, adds and removes admin
+  accounts. All admins have the same rights.
+  ```bash
+  docker compose exec app node scripts/admin-user.mjs list
+  ```
+  ```bash
+  docker compose exec app node scripts/admin-user.mjs add colleague@example.com
+  ```
+  ```bash
+  docker compose exec app node scripts/admin-user.mjs remove colleague@example.com
+  ```
+  `add` asks for the password twice without showing it (min. 12 characters); it is never a
+  command-line argument, so it can't end up in shell history or the process list. Without a terminal
+  it reads one line from stdin (`docker compose exec -T app node scripts/admin-user.mjs add x@example.com < pwfile`).
+  An existing e-mail is never overwritten (case-insensitive). `remove` also revokes that admin's
+  sessions and refuses to remove the last admin. `list` shows id, e-mail, creation date and active
+  sessions, never hashes. In production add `-f compose.yaml -f compose.prod.yaml`.
 - Passwords are stored as scrypt hashes. Sessions: random 256-bit token in an `HttpOnly`,
   `SameSite=Lax` cookie (`Secure` when `APP_URL` is https), 7-day expiry, stored as a SHA-256 hash and
   revoked on sign-out.
@@ -328,9 +345,10 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
 
 ## Known limitations / next steps
 
-- **Single admin account**: only the admin from `.env` can sign in; there is no user management or
-  password change in the UI (use `--reset-admin-password`). Consultant accounts with their own
-  permissions (e.g. seeing only their own bookings) are the next step.
+- **Admin accounts are managed from the command line** (`scripts/admin-user.mjs`), not in the UI, and
+  all admins have the same rights. A password change for another admin means remove + add;
+  `--reset-admin-password` changes the `.env` admin. Consultant accounts with their own permissions
+  (e.g. seeing only their own bookings) are the next step.
 - Consultants and locations themselves (names, addresses, adding a new consultant) are edited in the
   database/seed for now; the admin manages their schedules and days off.
 - No emails/SMS yet — the confirmation page is the only receipt; customers should keep the link.
@@ -384,6 +402,7 @@ Actions; Next.js rejects those requests and nothing is executed. They can be ign
 | Month calendar for the date step (roving tabindex, disabled non-bookable days, 60-day window) | Correction #4: a real calendar is easier to read than a list of chips; keyboard and screen-reader behaviour checked with axe-core over the DevTools protocol, since Lighthouse cannot reach that step. |
 | Header text links hidden below 640px by default (not by a later override) plus overflow guards | Correction #4: a CSS rule order bug made the page wider than the screen on narrow viewports; verified no horizontal scroll from 320px to 1920px. |
 | Non-working days and days off are never bookable (greyed in the calendar) | Correction #4: verified they never return slots; `tests/calendar.test.ts` guards it and a hint explains it to customers. |
+| `scripts/admin-user.mjs` add / remove / list instead of only the single `.env` admin | Item 6 of correction #4: more than one admin without building a user-management UI. Password never on the command line; never overwrites; the last admin can't be removed; removal revokes sessions. |
 | Screenshots taken with placeholder contacts (`CONTACT_PHONE`/`CONTACT_EMAIL` overridden for that run only) | Owner's instruction: the repository is public. |
 
 ## Code review
