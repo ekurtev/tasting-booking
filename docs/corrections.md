@@ -25,3 +25,11 @@ Plan v1 is kept unchanged in [../plan-versions/01-plan-v1-before-correction-1.md
 6. Docs naming: `docs/01-specification.md`, `docs/01-plan.md`, `docs/corrections.md`, `plan-versions/`. README includes "What we changed and why", the region note (AMS3 instead of FRA1: Basic Regular plans were unavailable in FRA1; data stays in the EU) and the single-admin limitation (consultant accounts = next step).
 
 Priority: finish PR 1 first and report as soon as `docker compose up -d --build` works from scratch with a booking saved, before starting PR 2.
+
+## Correction #2 (production test, before submission)
+
+Found by the owner while testing the deployed site; fixed on `fix/code-review` together with the code-review findings (see README → "Code review").
+
+1. README deploy section: the real server path is `/opt/apps/tasting-booking` (not `~/tasting-booking`). Document how to add new `.env` keys after a `git pull` (`gen-env.sh` never overwrites an existing `.env`) and the `docker compose … logs` check after an update.
+2. README: `Server Reference ID did not match` errors in the logs come from internet scanners probing Next.js Server Actions and are rejected — expected noise.
+3. The admin could mark a booking as completed / no-show before it had started. Decision: block it (small change) — the API returns `409 not_started` and the day view offers only cancellation until the start time.

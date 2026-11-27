@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { listBookingsForDay, listConsultants } from "@/lib/admin";
+import { hasStarted, listBookingsForDay, listConsultants } from "@/lib/admin";
 import { requireAdminPage } from "@/lib/admin-session";
 import { addDays, formatDateLong, formatTime, isValidDate, sofiaDate, sofiaToUtc } from "@/lib/time";
 import StatusActions from "./StatusActions";
@@ -26,6 +26,7 @@ export default async function DayViewPage({
   const consultant = consultants.find((c) => String(c.id) === sp.consultant) ?? consultants[0];
   const date = sp.date && isValidDate(sp.date) ? sp.date : sofiaDate(new Date());
   const bookings = consultant ? await listBookingsForDay(consultant.id, date) : [];
+  const now = new Date();
   const link = (d: string) => `/admin?consultant=${consultant?.id ?? ""}&date=${d}`;
 
   return (
@@ -93,7 +94,9 @@ export default async function DayViewPage({
                   <td>
                     <span className={`badge status-${b.status}`}>{STATUS_LABELS[b.status]}</span>
                   </td>
-                  <td>{b.status === "confirmed" ? <StatusActions id={b.id} /> : "—"}</td>
+                  <td>
+                    {b.status === "confirmed" ? <StatusActions id={b.id} started={hasStarted(b.startsAt, now)} /> : "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>

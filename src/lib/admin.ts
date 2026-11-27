@@ -44,22 +44,33 @@ export async function listBookingsForDay(consultantId: number, date: string): Pr
 
 export const statusSchema = z.object({ status: z.enum(["completed", "no_show", "cancelled"]) });
 
-/** Allowed transitions: confirmed → completed | no_show | cancelled. */
+/** True once a booking has started — only then can it be marked completed or no-show. */
+export function hasStarted(startsAt: Date, now: Date): boolean {
+  return startsAt.getTime() <= now.getTime();
+}
+
+/**
+ * Allowed transitions: confirmed → cancelled (any time), confirmed → completed | no_show (only once
+ * the booking has started — nobody can attend or miss a tasting that has not begun).
+ */
 export async function updateBookingStatus(
   id: string,
   status: "completed" | "no_show" | "cancelled",
-): Promise<"ok" | "not_found" | "invalid_transition"> {
+  now = new Date(),
+): Promise<"ok" | "not_found" | "invalid_transition" | "not_started"> {
   if (!z.uuid().safeParse(id).success) return "not_found";
   const pool = getPool();
   const res = await pool.query(
     `UPDATE bookings SET status = $2::booking_status,
             cancelled_at = CASE WHEN $2::booking_status = 'cancelled' THEN now() ELSE cancelled_at END
-      WHERE id = $1 AND status = 'confirmed'`,
-    [id, status],
+      WHERE id = $1 AND status = 'confirmed'
+        AND ($2::booking_status = 'cancelled' OR starts_at <= $3::timestamptz)`,
+    [id, status, now],
   );
   if (res.rowCount) return "ok";
-  const exists = await pool.query("SELECT 1 FROM bookings WHERE id = $1", [id]);
-  return exists.rowCount ? "invalid_transition" : "not_found";
+  const existing = await pool.query("SELECT status FROM bookings WHERE id = $1", [id]);
+  if (!existing.rowCount) return "not_found";
+  return existing.rows[0].status === "confirmed" ? "not_started" : "invalid_transition";
 }
 
 // ---------- tasting types ----------

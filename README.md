@@ -54,7 +54,8 @@ cancellation is allowed until 24 h before the start; after that the page shows `
   every admin API handler verify the session against the database. State-changing admin requests must
   come from the same origin (CSRF check), otherwise `403`. Admin responses are `noindex` and `no-store`.
 - **Day view**: choose a consultant and a date → time, tasting type, customer, phone, status. Confirmed
-  bookings can be set to *completed*, *no-show* or *cancelled* (cancelling frees the slot); other
+  bookings can be *cancelled* at any time (this frees the slot). *Completed* and *no-show* are offered
+  only once the booking has started — the API rejects them earlier with `409 not_started`. Other
   transitions are rejected.
 - **Tasting types**: add, edit (name, description, duration, price) and deactivate. Inactive types
   disappear from the public site; existing bookings keep their data.
@@ -115,11 +116,12 @@ Server: DigitalOcean droplet `vkus-lc7` (188.166.70.45, AMS3, Ubuntu 24.04), use
 only, Docker + Compose installed, Cloud Firewall (22 from the owner IP, 80/443 open), Cloudflare DNS
 `vkus.eliankurtev.com` → droplet (DNS only). No first-time server setup is needed.
 
-On the droplet as `deploy`:
+On the droplet as `deploy`. The app lives in **`/opt/apps/tasting-booking`**; every command below runs
+from that directory (`/opt/apps` must be writable by `deploy`).
 
 1. Get the code (private repo — use a deploy key or `gh auth login` on the server):
    ```bash
-   git clone git@github.com:ekurtev/tasting-booking.git ~/tasting-booking && cd ~/tasting-booking
+   git clone git@github.com:ekurtev/tasting-booking.git /opt/apps/tasting-booking && cd /opt/apps/tasting-booking
    ```
 2. Create `.env` with generated secrets (not printed), then edit the non-secret values:
    ```bash
@@ -152,13 +154,41 @@ On the droplet as `deploy`:
 7. Open https://vkus.eliankurtev.com and make a test booking, then sign in at
    https://vkus.eliankurtev.com/admin and find it in the day view.
 
-Update to a new version:
+### Update to a new version
 
-```bash
-cd ~/tasting-booking && git pull && docker compose -f compose.yaml -f compose.prod.yaml up -d --build
-```
+1. Pull the code:
+   ```bash
+   cd /opt/apps/tasting-booking && git pull
+   ```
+2. Check for **new `.env` keys**. `gen-env.sh` never touches an existing `.env`, so variables added to
+   `.env.example` in a new release must be added by hand. This lists key *names* only (no values) that
+   are in `.env.example` but missing from `.env`:
+   ```bash
+   comm -23 <(grep -oE '^[A-Z0-9_]+=' .env.example | sort) <(grep -oE '^[A-Z0-9_]+=' .env | sort)
+   ```
+   No output means nothing to do. For each listed key: if its value in `.env.example` is `__GENERATE__`,
+   append a fresh secret without printing it (replace `NEW_KEY`):
+   ```bash
+   printf 'NEW_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
+   ```
+   otherwise add it with the real value in an editor (`nano .env`).
+3. Rebuild and restart:
+   ```bash
+   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+   ```
+4. Check that it came up — both services `running`/`healthy`, and the app log shows
+   `[migrate] database is up to date` followed by Next.js `Ready`:
+   ```bash
+   docker compose -f compose.yaml -f compose.prod.yaml ps
+   ```
+   ```bash
+   docker compose -f compose.yaml -f compose.prod.yaml logs --tail=50 app
+   ```
+   (`logs -f app` follows the log live.)
 
-Logs: `docker compose -f compose.yaml -f compose.prod.yaml logs -f app`.
+**Expected log noise:** errors containing `Server Reference ID did not match` come from internet
+scanners probing for Next.js Server Actions (they POST made-up action ids). This app defines no Server
+Actions; Next.js rejects those requests and nothing is executed. They can be ignored.
 
 ### Security notes
 
@@ -205,3 +235,25 @@ Logs: `docker compose -f compose.yaml -f compose.prod.yaml logs -f app`.
 | Status changes only from *confirmed* | Spec lists confirmed → completed / no-show / cancelled; anything else (e.g. un-cancelling into a slot that may be taken) is rejected. |
 | Days off do not cancel existing bookings | Silently cancelling customers is worse than a warning; the admin gets the number of affected bookings and decides. |
 | Plain SQL migrations with a tiny runner instead of an ORM | The key invariant is a native Postgres exclusion constraint; SQL keeps it explicit and reviewable. |
+| *Completed* / *no-show* only after the booking has started | Correction #2 (production test): the admin could mark a future booking as a no-show. Blocked in the API (`409 not_started`) and hidden in the day view; cancelling stays possible at any time. |
+| Deploy docs use `/opt/apps/tasting-booking`, explain adding new `.env` keys and the post-update logs check | Correction #2: the real server path differs from `~/tasting-booking`, and `gen-env.sh` never overwrites an existing `.env`. |
+| README notes the `Server Reference ID did not match` log lines as scanner noise | Correction #2: seen in production logs; they are rejected probes, not app errors. |
+
+## Code review
+
+Before submission the whole of `main` was reviewed with the `code_review` skill (security, correctness,
+quality) — all of `src/`, migrations, scripts, Docker/Compose files and tests; `npm audit --omit=dev`
+reported 0 vulnerabilities.
+
+**Found:** no Critical issues (no committed secrets, parameterized SQL only, no raw HTML rendering,
+session checked in every admin page and handler, double booking blocked in the database).
+
+| Severity | Finding | Outcome |
+|---|---|---|
+| Warning | Admin could set a future booking to *completed* / *no-show* (`src/lib/admin.ts`) | **Fixed**: SQL only allows it when `starts_at <= now`, API answers `409 not_started`, the day view shows only *Отмени* before the start; tests cover both cases. |
+| Warning | Deploy docs had the wrong server path and no procedure for new `.env` keys after `git pull` (a missing required key stops `docker compose up`) | **Fixed**: see "Update to a new version". |
+| Suggestion | Public `/api/days` and `/api/slots` are not rate limited | Left: read-only, cheap (a few indexed queries), no data exposure; revisit if traffic grows. |
+| Suggestion | `/api/days` and `/api/slots` parse ids with `Number()` instead of `parseId()` | Left: harmless — ids are only matched against lists in JS, never sent to SQL. |
+| Suggestion | `POST /api/bookings` returns the generic message instead of the first field message | Left: the booking form shows the per-field `fieldErrors`, so users already see specific messages. |
+| Suggestion | Rate-limiter sweep is O(n) per request once >10k keys are active within an hour | Left: needs >10k distinct client IPs per hour (IPv6 is disabled at NPM); fine for one small container. |
+| Suggestion | Cookie `Secure` flag depends on `APP_URL` being `https://` | Left: documented in the deploy steps; production `APP_URL` is https. |
