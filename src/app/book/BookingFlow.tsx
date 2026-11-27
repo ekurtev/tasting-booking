@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ALLERGEN_NOTICE } from "@/content/company";
 import { formatDuration, formatPrice } from "@/lib/format";
@@ -14,6 +14,13 @@ const timeFmt = new Intl.DateTimeFormat("bg-BG", { timeZone: TZ, hour: "2-digit"
 const dayFmt = new Intl.DateTimeFormat("bg-BG", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" });
 const longDayFmt = new Intl.DateTimeFormat("bg-BG", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" });
 const dateOf = (ymd: string) => new Date(`${ymd}T12:00:00Z`);
+const scrollBehavior = (): ScrollBehavior =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+const FIELD_ORDER = ["name", "phone", "email", "guests", "note", "consent"];
+
+function slotsWord(n: number) {
+  return n === 1 ? "1 свободен час" : `${n} свободни часа`;
+}
 
 const STEP_TITLES = ["Вид дегустация", "Консултант и град", "Дата", "Час", "Вашите данни"];
 
@@ -37,26 +44,45 @@ export default function BookingFlow({
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // Polite announcements for screen readers (step changes, loading, results).
+  const [announcement, setAnnouncement] = useState("");
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const firstRender = useRef(true);
 
   const type = types.find((t) => t.id === typeId) ?? null;
   const consultant = consultants.find((c) => c.id === consultantId) ?? null;
 
   const loadDays = useCallback(async (cId: number, tId: number) => {
     setDays(null);
+    setAnnouncement("Зареждане на свободните дни…");
     const res = await fetch(`/api/days?consultant=${cId}&type=${tId}`, { cache: "no-store" });
-    setDays(res.ok ? (await res.json()).days : []);
+    const list: Day[] = res.ok ? (await res.json()).days : [];
+    setDays(list);
+    setAnnouncement(list.length ? `Намерени са ${list.length} дни със свободни часове.` : "Няма свободни дни.");
   }, []);
 
   const loadSlots = useCallback(async (cId: number, tId: number, d: string) => {
     setSlots(null);
+    setAnnouncement("Зареждане на свободните часове…");
     const res = await fetch(`/api/slots?consultant=${cId}&type=${tId}&date=${d}`, { cache: "no-store" });
-    setSlots(res.ok ? (await res.json()).slots : []);
+    const list: string[] = res.ok ? (await res.json()).slots : [];
+    setSlots(list);
+    setAnnouncement(list.length ? `Намерени са ${slotsWord(list.length)}.` : "За този ден няма свободни часове.");
   }, []);
+
+  // Move focus to the new step's heading so keyboard and screen-reader users land on the new content.
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    headingRef.current?.focus();
+  }, [step]);
 
   function go(next: number) {
     setNotice(null);
     setStep(next);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: scrollBehavior() });
   }
 
   async function submit(form: HTMLFormElement) {
@@ -92,10 +118,16 @@ export default function BookingFlow({
         setStep(3);
         if (date) void loadSlots(consultant.id, type.id, date);
         setNotice(body.message);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({ top: 0, behavior: scrollBehavior() });
         return;
       }
-      if (res.status === 400 && body.fieldErrors) setFieldErrors(body.fieldErrors);
+      if (res.status === 400 && body.fieldErrors) {
+        setFieldErrors(body.fieldErrors);
+        const first = FIELD_ORDER.find((f) => body.fieldErrors[f]);
+        if (first) requestAnimationFrame(() => document.getElementById(first)?.focus());
+        setNotice("Моля, поправете отбелязаните полета.");
+        return;
+      }
       setNotice(body.message ?? "Възникна грешка. Моля, опитайте отново.");
     } catch {
       setNotice("Няма връзка със сървъра. Моля, опитайте отново.");
@@ -106,13 +138,25 @@ export default function BookingFlow({
 
   return (
     <div>
-      <ol className="steps" aria-label={`Стъпка ${step + 1} от ${STEP_TITLES.length}`}>
+      <ol className="steps" aria-label="Стъпки на резервацията">
         {STEP_TITLES.map((t, i) => (
-          <li key={t} className={i <= step ? "done" : ""} />
+          <li key={t} className={i <= step ? "done" : ""} aria-current={i === step ? "step" : undefined}>
+            <span className="sr-only">
+              {i + 1}. {t}
+              {i < step ? " (готово)" : ""}
+            </span>
+          </li>
         ))}
       </ol>
-      <h2>
-        {step + 1}. {STEP_TITLES[step]}
+      <div className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </div>
+      <h2 ref={headingRef} tabIndex={-1}>
+        <span className="sr-only">
+          Стъпка {step + 1} от {STEP_TITLES.length}:{" "}
+        </span>
+        <span aria-hidden="true">{step + 1}. </span>
+        {STEP_TITLES[step]}
       </h2>
       {step > 0 && (
         <p className="back">
@@ -181,7 +225,7 @@ export default function BookingFlow({
 
       {step === 2 &&
         (days === null ? (
-          <p className="meta">Зареждане на свободните дни…</p>
+          <p className="meta" aria-hidden="true">Зареждане на свободните дни…</p>
         ) : days.length === 0 ? (
           <p>В следващите 60 дни няма свободни часове. Моля, изберете друг консултант.</p>
         ) : (
@@ -192,6 +236,7 @@ export default function BookingFlow({
                 type="button"
                 className="chip"
                 aria-pressed={d.date === date}
+                aria-label={`${longDayFmt.format(dateOf(d.date))}, ${slotsWord(d.slots)}`}
                 onClick={() => {
                   setDate(d.date);
                   setSlot(null);
@@ -200,7 +245,7 @@ export default function BookingFlow({
                 }}
               >
                 {dayFmt.format(dateOf(d.date))}
-                <small>{d.slots} своб.</small>
+                <small aria-hidden="true">{d.slots} своб.</small>
               </button>
             ))}
           </div>
@@ -210,7 +255,7 @@ export default function BookingFlow({
         <>
           <p className="meta">{longDayFmt.format(dateOf(date))}</p>
           {slots === null ? (
-            <p className="meta">Зареждане на свободните часове…</p>
+            <p className="meta" aria-hidden="true">Зареждане на свободните часове…</p>
           ) : slots.length === 0 ? (
             <p>За този ден вече няма свободни часове. Моля, изберете друга дата.</p>
           ) : (
@@ -260,6 +305,7 @@ export default function BookingFlow({
               </div>
             </dl>
           </div>
+          <p className="meta">Полетата без „по желание“ са задължителни.</p>
           <form
             noValidate
             onSubmit={(e) => {
@@ -281,8 +327,22 @@ export default function BookingFlow({
             />
             <div className="field">
               <label htmlFor="note">Бележка (по желание)</label>
-              <textarea id="note" name="note" rows={3} maxLength={1000} />
-              {fieldErrors.note && <span className="err">{fieldErrors.note}</span>}
+              <textarea
+                id="note"
+                name="note"
+                rows={3}
+                maxLength={1000}
+                aria-invalid={!!fieldErrors.note}
+                aria-describedby={fieldErrors.note ? "note-error" : "note-hint"}
+              />
+              <span id="note-hint" className="hint">
+                Моля, не пишете данни за здравето (напр. алергии) — обадете ни се.
+              </span>
+              {fieldErrors.note && (
+                <span id="note-error" className="err">
+                  {fieldErrors.note}
+                </span>
+              )}
             </div>
             <div className="checkbox">
               <input
@@ -330,8 +390,19 @@ function Field({
   return (
     <div className="field">
       <label htmlFor={name}>{label}</label>
-      <input id={name} name={name} aria-invalid={!!error} {...rest} />
-      {error && <span className="err">{error}</span>}
+      <input
+        id={name}
+        name={name}
+        aria-invalid={!!error}
+        aria-required={rest.required || undefined}
+        aria-describedby={error ? `${name}-error` : undefined}
+        {...rest}
+      />
+      {error && (
+        <span id={`${name}-error`} className="err">
+          {error}
+        </span>
+      )}
     </div>
   );
 }
