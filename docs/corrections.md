@@ -52,3 +52,13 @@ Plan v1 is kept unchanged in [../plan-versions/03-plan-spec2-v1-before-correctio
 1. The repository is now **public**: no real phone or e-mail in `src/content/company.ts`. `CONTACT_PHONE` stays in `.env` / `.env.example` (production already has it — the deploy must not break); new `CONTACT_EMAIL` and `ACCESSIBILITY_EMAIL` (defaults to `CONTACT_EMAIL`). The server reads them at request time with obvious placeholders as fallbacks.
 2. The booking checkbox is **not GDPR consent** — the legal basis is Art. 6(1)(b). Label: „Запознах се с Общите условия и Политиката за поверителност“ (both linked); still required; the timestamp is still stored (`consent_at`). The privacy policy says the same.
 3. Deadline: submission before 19:00, report by 17:45. Priority if time runs short: (a) footer + legal pages + consent links, (b) info pages + allergens, (c) accessibility fixes + Lighthouse, (d) sitemap/robots/404/error, (e) retention job.
+
+## Specification 3 — clarifying questions (before plan v1)
+
+Spec: [03-specification.md](03-specification.md), plan: [03-plan.md](03-plan.md).
+
+| Topic | Answer |
+|---|---|
+| Typography | **Self-hosted font**: Lora (SIL OFL 1.1, Cyrillic) for headings from the `@fontsource-variable/lora` package via `next/font/local`, served from our own origin; body text keeps the system font. CSP unchanged. |
+| Before/after screenshots | Committed to `docs/screenshots/spec3/` and embedded in the PR. **The repo is public:** every screenshot run used `CONTACT_PHONE="+359 000 000 000"` and `CONTACT_EMAIL="info@example.com"` as a shell override for that run only (`.env` untouched); no real name, phone, e-mail or booking may be visible. |
+| Rich tasting content | `src/content/tastings.ts` keyed by type slug; name, duration and price still from the database; types added later fall back to their database description. |

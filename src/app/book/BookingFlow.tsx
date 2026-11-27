@@ -12,7 +12,12 @@ type Day = { date: string; slots: number };
 const TZ = "Europe/Sofia";
 const timeFmt = new Intl.DateTimeFormat("bg-BG", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 const dayFmt = new Intl.DateTimeFormat("bg-BG", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" });
-const longDayFmt = new Intl.DateTimeFormat("bg-BG", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" });
+const longDayFmt = new Intl.DateTimeFormat("bg-BG", {
+  timeZone: "UTC",
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
 const dateOf = (ymd: string) => new Date(`${ymd}T12:00:00Z`);
 const scrollBehavior = (): ScrollBehavior =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -137,245 +142,273 @@ export default function BookingFlow({
   }
 
   return (
-    <div>
-      <ol className="steps" aria-label="Стъпки на резервацията">
-        {STEP_TITLES.map((t, i) => (
-          <li key={t} className={i <= step ? "done" : ""} aria-current={i === step ? "step" : undefined}>
-            <span className="sr-only">
-              {i + 1}. {t}
-              {i < step ? " (готово)" : ""}
-            </span>
-          </li>
-        ))}
-      </ol>
-      <div className="sr-only" role="status" aria-live="polite">
-        {announcement}
-      </div>
-      <h2 ref={headingRef} tabIndex={-1}>
-        <span className="sr-only">
-          Стъпка {step + 1} от {STEP_TITLES.length}:{" "}
-        </span>
-        <span aria-hidden="true">{step + 1}. </span>
-        {STEP_TITLES[step]}
-      </h2>
-      {step > 0 && (
-        <p className="back">
-          <button type="button" className="link-btn" onClick={() => go(step - 1)}>
-            ← Назад
-          </button>
-        </p>
-      )}
-      {notice && (
-        <div className="alert alert-error" role="alert">
-          {notice}
-        </div>
-      )}
-
-      {step === 0 && (
-        <>
-        <p className="allergen">{ALLERGEN_NOTICE}</p>
-        <div className="grid">
-          {types.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className="choice"
-              aria-pressed={t.id === typeId}
-              onClick={() => {
-                setTypeId(t.id);
-                setDate(null);
-                setSlot(null);
-                go(1);
-              }}
-            >
-              <strong>{t.name}</strong>
-              <span className="meta">
-                {formatDuration(t.durationMinutes)} · <span className="price">{formatPrice(t.priceCents)}</span>
+    <div className="booking-layout">
+      <div>
+        <ol className="steps" aria-label="Стъпки на резервацията">
+          {STEP_TITLES.map((t, i) => (
+            <li key={t} className={i < step ? "done" : ""} aria-current={i === step ? "step" : undefined}>
+              <span className="step-name" aria-hidden="true">
+                {t}
               </span>
-            </button>
-          ))}
-        </div>
-        </>
-      )}
-
-      {step === 1 && (
-        <div className="grid">
-          {consultants.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className="choice"
-              aria-pressed={c.id === consultantId}
-              onClick={() => {
-                setConsultantId(c.id);
-                setDate(null);
-                setSlot(null);
-                if (typeId) void loadDays(c.id, typeId);
-                go(2);
-              }}
-            >
-              <strong>{c.city}</strong>
-              <span className="meta">
-                Консултант: {c.name} · {c.locationName}
+              <span className="sr-only">
+                {i + 1}. {t}
+                {i < step ? " (готово)" : ""}
               </span>
-            </button>
+            </li>
           ))}
+        </ol>
+        <div className="sr-only" role="status" aria-live="polite">
+          {announcement}
         </div>
-      )}
-
-      {step === 2 &&
-        (days === null ? (
-          <p className="meta" aria-hidden="true">Зареждане на свободните дни…</p>
-        ) : days.length === 0 ? (
-          <p>В следващите 60 дни няма свободни часове. Моля, изберете друг консултант.</p>
-        ) : (
-          <div className="chips">
-            {days.map((d) => (
-              <button
-                key={d.date}
-                type="button"
-                className="chip"
-                aria-pressed={d.date === date}
-                aria-label={`${longDayFmt.format(dateOf(d.date))}, ${slotsWord(d.slots)}`}
-                onClick={() => {
-                  setDate(d.date);
-                  setSlot(null);
-                  if (consultantId && typeId) void loadSlots(consultantId, typeId, d.date);
-                  go(3);
-                }}
-              >
-                {dayFmt.format(dateOf(d.date))}
-                <small aria-hidden="true">{d.slots} своб.</small>
-              </button>
-            ))}
+        <h2 ref={headingRef} tabIndex={-1}>
+          <span className="sr-only">
+            Стъпка {step + 1} от {STEP_TITLES.length}:{" "}
+          </span>
+          <span aria-hidden="true">{step + 1}. </span>
+          {STEP_TITLES[step]}
+        </h2>
+        {step > 0 && (
+          <p className="back">
+            <button type="button" className="link-btn" onClick={() => go(step - 1)}>
+              ← Назад
+            </button>
+          </p>
+        )}
+        {notice && (
+          <div className="alert alert-error" role="alert">
+            {notice}
           </div>
-        ))}
+        )}
 
-      {step === 3 && date && (
-        <>
-          <p className="meta">{longDayFmt.format(dateOf(date))}</p>
-          {slots === null ? (
-            <p className="meta" aria-hidden="true">Зареждане на свободните часове…</p>
-          ) : slots.length === 0 ? (
-            <p>За този ден вече няма свободни часове. Моля, изберете друга дата.</p>
-          ) : (
-            <div className="chips">
-              {slots.map((s) => (
+        {step === 0 && (
+          <>
+            <p className="allergen">{ALLERGEN_NOTICE}</p>
+            <div className="grid">
+              {types.map((t) => (
                 <button
-                  key={s}
+                  key={t.id}
                   type="button"
-                  className="chip"
-                  aria-pressed={s === slot}
+                  className="choice"
+                  aria-pressed={t.id === typeId}
                   onClick={() => {
-                    setSlot(s);
-                    go(4);
+                    setTypeId(t.id);
+                    setDate(null);
+                    setSlot(null);
+                    go(1);
                   }}
                 >
-                  {timeFmt.format(new Date(s))}
+                  <strong>{t.name}</strong>
+                  <span className="meta">
+                    {formatDuration(t.durationMinutes)} · <span className="price">{formatPrice(t.priceCents)}</span>
+                  </span>
                 </button>
               ))}
             </div>
-          )}
-        </>
-      )}
+          </>
+        )}
 
-      {step === 4 && type && consultant && slot && (
-        <>
-          <div className="card" style={{ marginBottom: 16 }}>
-            <dl className="summary">
-              <div>
-                <dt>Дегустация</dt>
-                <dd>{type.name}</dd>
+        {step === 1 && (
+          <div className="grid">
+            {consultants.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="choice"
+                aria-pressed={c.id === consultantId}
+                onClick={() => {
+                  setConsultantId(c.id);
+                  setDate(null);
+                  setSlot(null);
+                  if (typeId) void loadDays(c.id, typeId);
+                  go(2);
+                }}
+              >
+                <strong>{c.city}</strong>
+                <span className="meta">
+                  Консултант: {c.name} · {c.locationName}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {step === 2 &&
+          (days === null ? (
+            <p className="meta" aria-hidden="true">
+              Зареждане на свободните дни…
+            </p>
+          ) : days.length === 0 ? (
+            <p>В следващите 60 дни няма свободни часове. Моля, изберете друг консултант.</p>
+          ) : (
+            <div className="chips">
+              {days.map((d) => (
+                <button
+                  key={d.date}
+                  type="button"
+                  className="chip"
+                  aria-pressed={d.date === date}
+                  aria-label={`${longDayFmt.format(dateOf(d.date))}, ${slotsWord(d.slots)}`}
+                  onClick={() => {
+                    setDate(d.date);
+                    setSlot(null);
+                    if (consultantId && typeId) void loadSlots(consultantId, typeId, d.date);
+                    go(3);
+                  }}
+                >
+                  {dayFmt.format(dateOf(d.date))}
+                  <small aria-hidden="true">{d.slots} своб.</small>
+                </button>
+              ))}
+            </div>
+          ))}
+
+        {step === 3 && date && (
+          <>
+            <p className="meta">{longDayFmt.format(dateOf(date))}</p>
+            {slots === null ? (
+              <p className="meta" aria-hidden="true">
+                Зареждане на свободните часове…
+              </p>
+            ) : slots.length === 0 ? (
+              <p>За този ден вече няма свободни часове. Моля, изберете друга дата.</p>
+            ) : (
+              <div className="chips">
+                {slots.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="chip"
+                    aria-pressed={s === slot}
+                    onClick={() => {
+                      setSlot(s);
+                      go(4);
+                    }}
+                  >
+                    {timeFmt.format(new Date(s))}
+                  </button>
+                ))}
               </div>
+            )}
+          </>
+        )}
+
+        {step === 4 && type && consultant && slot && (
+          <>
+            <p className="meta">Полетата без „по желание“ са задължителни.</p>
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                void submit(e.currentTarget);
+              }}
+            >
+              <Field name="name" label="Име и фамилия" autoComplete="name" required error={fieldErrors.name} />
+              <Field name="phone" label="Телефон" type="tel" autoComplete="tel" required error={fieldErrors.phone} />
+              <Field name="email" label="Имейл" type="email" autoComplete="email" required error={fieldErrors.email} />
+              <Field
+                name="guests"
+                label="Брой гости (по желание)"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={50}
+                error={fieldErrors.guests}
+              />
+              <div className="field">
+                <label htmlFor="note">Бележка (по желание)</label>
+                <textarea
+                  id="note"
+                  name="note"
+                  rows={3}
+                  maxLength={1000}
+                  aria-invalid={!!fieldErrors.note}
+                  aria-describedby={fieldErrors.note ? "note-error" : "note-hint"}
+                />
+                <span id="note-hint" className="hint">
+                  Моля, не пишете данни за здравето (напр. алергии) - обадете ни се.
+                </span>
+                {fieldErrors.note && (
+                  <span id="note-error" className="err">
+                    {fieldErrors.note}
+                  </span>
+                )}
+              </div>
+              <div className="checkbox">
+                <input
+                  type="checkbox"
+                  id="consent"
+                  name="consent"
+                  required
+                  aria-required="true"
+                  aria-invalid={!!fieldErrors.consent}
+                  aria-describedby={fieldErrors.consent ? "consent-error" : undefined}
+                />
+                <label htmlFor="consent">
+                  Запознах се с{" "}
+                  <a href="/obshti-usloviya" target="_blank" rel="noopener">
+                    Общите условия<span className="sr-only"> (отваря се в нов прозорец)</span>
+                  </a>{" "}
+                  и{" "}
+                  <a href="/poveritelnost" target="_blank" rel="noopener">
+                    Политиката за поверителност<span className="sr-only"> (отваря се в нов прозорец)</span>
+                  </a>
+                  .
+                </label>
+              </div>
+              {fieldErrors.consent && (
+                <p id="consent-error" className="err">
+                  {fieldErrors.consent}
+                </p>
+              )}
+              <button type="submit" className="btn btn-block" disabled={submitting}>
+                {submitting ? "Изпращане…" : "Потвърди резервацията"}
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+
+      {type && (
+        <aside className="card booking-summary" aria-labelledby="summary-title">
+          <h2 id="summary-title">Вашият избор</h2>
+          <dl className="summary">
+            <div>
+              <dt>Дегустация</dt>
+              <dd>{type.name}</dd>
+            </div>
+            <div>
+              <dt>Продължителност</dt>
+              <dd>{formatDuration(type.durationMinutes)}</dd>
+            </div>
+            {consultant && (
               <div>
                 <dt>Град</dt>
                 <dd>
                   {consultant.city} · {consultant.name}
                 </dd>
               </div>
-              <div>
-                <dt>Дата и час</dt>
-                <dd>
-                  {longDayFmt.format(dateOf(date!))}, {timeFmt.format(new Date(slot))}
-                </dd>
-              </div>
-              <div>
-                <dt>Цена</dt>
-                <dd>{formatPrice(type.priceCents)}</dd>
-              </div>
-            </dl>
-          </div>
-          <p className="meta">Полетата без „по желание“ са задължителни.</p>
-          <form
-            noValidate
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submit(e.currentTarget);
-            }}
-          >
-            <Field name="name" label="Име и фамилия" autoComplete="name" required error={fieldErrors.name} />
-            <Field name="phone" label="Телефон" type="tel" autoComplete="tel" required error={fieldErrors.phone} />
-            <Field name="email" label="Имейл" type="email" autoComplete="email" required error={fieldErrors.email} />
-            <Field
-              name="guests"
-              label="Брой гости (по желание)"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={50}
-              error={fieldErrors.guests}
-            />
-            <div className="field">
-              <label htmlFor="note">Бележка (по желание)</label>
-              <textarea
-                id="note"
-                name="note"
-                rows={3}
-                maxLength={1000}
-                aria-invalid={!!fieldErrors.note}
-                aria-describedby={fieldErrors.note ? "note-error" : "note-hint"}
-              />
-              <span id="note-hint" className="hint">
-                Моля, не пишете данни за здравето (напр. алергии) — обадете ни се.
-              </span>
-              {fieldErrors.note && (
-                <span id="note-error" className="err">
-                  {fieldErrors.note}
-                </span>
-              )}
-            </div>
-            <div className="checkbox">
-              <input
-                type="checkbox"
-                id="consent"
-                name="consent"
-                required
-                aria-required="true"
-                aria-invalid={!!fieldErrors.consent}
-                aria-describedby={fieldErrors.consent ? "consent-error" : undefined}
-              />
-              <label htmlFor="consent">
-                Запознах се с{" "}
-                <a href="/obshti-usloviya" target="_blank" rel="noopener">
-                  Общите условия<span className="sr-only"> (отваря се в нов прозорец)</span>
-                </a>{" "}
-                и{" "}
-                <a href="/poveritelnost" target="_blank" rel="noopener">
-                  Политиката за поверителност<span className="sr-only"> (отваря се в нов прозорец)</span>
-                </a>
-                .
-              </label>
-            </div>
-            {fieldErrors.consent && (
-              <p id="consent-error" className="err">
-                {fieldErrors.consent}
-              </p>
             )}
-            <button type="submit" className="btn btn-block" disabled={submitting}>
-              {submitting ? "Изпращане…" : "Потвърди резервацията"}
-            </button>
-          </form>
-        </>
+            {date && (
+              <div>
+                <dt>Дата</dt>
+                <dd>{longDayFmt.format(dateOf(date))}</dd>
+              </div>
+            )}
+            {slot && (
+              <div>
+                <dt>Час</dt>
+                <dd>{timeFmt.format(new Date(slot))}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Цена</dt>
+              <dd className="price">{formatPrice(type.priceCents)}</dd>
+            </div>
+          </dl>
+          <p className="meta" style={{ margin: "10px 0 0", fontSize: "0.85rem" }}>
+            Плащане на място. Безплатен онлайн отказ до 24 часа преди началото.
+          </p>
+        </aside>
       )}
     </div>
   );

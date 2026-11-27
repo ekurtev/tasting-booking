@@ -77,7 +77,7 @@ export default async function DayViewPage({
               {bookings.map((b) => (
                 <tr key={b.id} className={b.status === "cancelled" ? "row-muted" : undefined}>
                   <td>
-                    {formatTime(b.startsAt)}–{formatTime(b.endsAt)}
+                    {formatTime(b.startsAt)} - {formatTime(b.endsAt)}
                   </td>
                   <td>{b.typeName}</td>
                   <td>
@@ -95,7 +95,7 @@ export default async function DayViewPage({
                     <span className={`badge status-${b.status}`}>{STATUS_LABELS[b.status]}</span>
                   </td>
                   <td>
-                    {b.status === "confirmed" ? <StatusActions id={b.id} started={hasStarted(b.startsAt, now)} /> : "—"}
+                    {b.status === "confirmed" ? <StatusActions id={b.id} started={hasStarted(b.startsAt, now)} /> : "-"}
                   </td>
                 </tr>
               ))}

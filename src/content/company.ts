@@ -34,10 +34,10 @@ export const company = {
     {
       slug: "sofia",
       city: "София",
-      name: "Сладка кутия – София",
+      name: "Сладка кутия - София",
       address: "[ул. „Примерна“ 1, София]",
       hours: [
-        { days: "Понеделник – петък", time: "09:00 – 18:00" },
+        { days: "Понеделник - петък", time: "09:00 - 18:00" },
         { days: "Събота и неделя", time: "почивни дни" },
       ],
       mapUrl: mapSearch("София"),
@@ -45,10 +45,10 @@ export const company = {
     {
       slug: "burgas",
       city: "Бургас",
-      name: "Сладка кутия – Бургас",
+      name: "Сладка кутия - Бургас",
       address: "[ул. „Примерна“ 2, Бургас]",
       hours: [
-        { days: "Понеделник – петък", time: "09:00 – 18:00" },
+        { days: "Понеделник - петък", time: "09:00 - 18:00" },
         { days: "Събота и неделя", time: "почивни дни" },
       ],
       mapUrl: mapSearch("Бургас"),
@@ -62,5 +62,5 @@ export function locationBySlug(slug: string | null | undefined): CompanyLocation
 
 /** Shown with every tasting type, in the FAQ and in the terms. We deliberately collect no allergy data. */
 export const ALLERGEN_NOTICE =
-  "Кутиите може да съдържат често срещани алергени — глутен, мляко, яйца, ядки, фъстъци, соя и сусам. " +
+  "Кутиите може да съдържат често срещани алергени - глутен, мляко, яйца, ядки, фъстъци, соя и сусам. " +
   "Ако вие или някой от гостите имате алергия, моля, свържете се с нас преди дегустацията.";
